@@ -13,10 +13,11 @@ export function similarity(a, b) {
   for (const n of B.values()) total += n;
   return total ? (2 * inter) / total : 0;
 }
-export function samePurchase(a, b) {
+export function samePurchase(a, b, ignoreCard = false) {
   if (a.date !== b.date) return false;
   if (Math.abs(Number(a.amount) - Number(b.amount)) > 0.009) return false;
   if (a.time && b.time && a.time !== b.time) return false;
+  if (!ignoreCard && a.card && b.card && a.card !== b.card) return false; // same shop and amount on two different cards = two purchases
   return similarity(a.merchant, b.merchant) >= 0.55;
 }
 
@@ -31,8 +32,9 @@ export function markDuplicates(groups, saved) {
     const usedHere = new Set();
     for (const r of group) {
       r.dup = null;
-      const s = pool.find(p => !p.used && samePurchase(p.t, r));
-      if (s) { s.used = true; r.dup = 'saved'; continue; }
+      // against what is already saved, the card may have been missing or wrong before: match anyway, the card gets corrected
+      const s = pool.find(p => !p.used && samePurchase(p.t, r, true));
+      if (s) { s.used = true; r.dup = 'saved'; r.dupOf = s.t.id; continue; }
       const b = accepted.find(p => !p.used && !usedHere.has(p) && p.group !== group && samePurchase(p.r, r));
       if (b) { b.used = true; r.dup = 'batch'; if (!b.r.time && r.time) b.r.time = r.time; continue; }
       const entry = { r, group, used: false };

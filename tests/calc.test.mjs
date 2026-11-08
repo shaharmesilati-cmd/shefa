@@ -142,5 +142,14 @@ console.log('v1.2 tests passed');
   const nick = parseStatement('הכרטיס של שחר 7781\nקפה 18.00\n06.11.26', new Date(2026, 10, 8, 15));
   assert.deepEqual(nick.rows.map(r => [r.merchant, r.card]), [['קפה', '7781']], 'any card nickname ending in 4 digits');
   assert.deepEqual(parseStatement('נובמבר 2026\nקפה 18.00\n06.11.26', new Date(2026, 10, 8, 15)).rows.map(r => r.card), [null], 'a month heading is not a card');
+    {
+    const { markDuplicates } = await import('../js/dedupe.js');
+    const a = [{ date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '4093' }];
+    const b = [{ date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '5512' }, { date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '4093' }];
+    assert.deepEqual(markDuplicates([a, b], []).map(r => r.dup), [null, null, 'batch'], 'same purchase on another card is not a duplicate');
+    const saved = [{ id: 's1', date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '4093' }];
+    const again = markDuplicates([[{ date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '5512' }]], saved);
+    assert.deepEqual([again[0].dup, again[0].dupOf], ['saved', 's1'], 'saved purchase with a wrong card is matched so its card can be fixed');
+  }
   console.log('v2 tests passed');
 }

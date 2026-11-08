@@ -119,6 +119,7 @@ export async function save(obj) {
 
 export function wipe() {
   dataKey = null;
+  try { localStorage.removeItem('stashwise-had-data'); } catch { }
   return new Promise(res => { const r = indexedDB.deleteDatabase(DB); r.onsuccess = r.onerror = r.onblocked = () => res(); });
 }
 

@@ -489,3 +489,9 @@ body { background: #FFFFFF; }
 .card4 input { max-width: 160px; letter-spacing: .2em; font-weight: 700; direction: ltr; text-align: right; }
 .c4-ic { width: 40px; height: 46px; border-radius: 12px; display: grid; place-items: center; background: #FFFFFF; color: var(--primary); flex: none; }
 .c4-ic .ic { width: 1.4rem; height: 1.4rem; }
+.grp-h { display: flex; align-items: flex-end; gap: 10px; background: var(--primary-soft); border-radius: 16px; padding: 10px 12px; margin-top: 4px; }
+.grp-t { flex: 1; min-width: 0; display: flex; flex-direction: column; align-self: center; }
+.grp-t small { color: var(--muted); font-size: .8rem; }
+.grp-h .field { width: 104px; flex: none; }
+.grp-h input { letter-spacing: .18em; font-weight: 700; direction: ltr; text-align: center; background: #FFFFFF; }
+.next.backup { background: var(--green-soft); } .next.backup .nx-ic { color: var(--green); }

@@ -4,7 +4,7 @@ import { $, esc, ic, toast, openSheet, download, armConfirm, monthName } from '.
 import { budgetKeyOf } from '../calc.js';
 import { install, lockNow, session, startAutoLock, stopAutoLock } from '../app.js';
 
-const VERSION = '2.1.1';
+const VERSION = '2.2.0';
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
@@ -39,7 +39,7 @@ export function render(el) {
     <p class="hint">הגיבוי הוא קובץ מוצפן בסיסמה שתבחר. שמור אותו במקום בטוח (למשל בכונן שלך). כדי לעבור לטלפון אחר - שחזר בו את הקובץ.</p>
     <div class="btn-row"><button class="btn primary" id="bk" type="button">${ic('download')}יצירת גיבוי</button>
       <label class="btn" for="rs">${ic('upload')}שחזור מגיבוי</label><input id="rs" type="file" accept=".stash,.kis,.shefa,application/json" hidden></div>
-    <p class="muted small">${state.tx.length} תנועות שמורות כרגע.</p></section>
+    <p class="muted small">${state.tx.length} תנועות שמורות כרגע · ${state.settings.lastBackup ? `גיבוי אחרון: ${new Date(state.settings.lastBackup).toLocaleDateString('he-IL')}` : 'עוד לא נוצר גיבוי'}</p></section>
 
   <section class="card"><div class="card-h"><h2>${ic('info')} על Stashwise</h2><span class="muted num">גרסה ${VERSION}</span></div>
     <p class="hint">עדכונים לא נכנסים לבד: כשיש גרסה חדשה תופיע הודעה ותבחר אם לעדכן. כך אף אחד לא יכול להחליף לך את האפליקציה בלי שתדע.</p>
@@ -99,15 +99,20 @@ function changeCode() {
 function backup() {
   openSheet('יצירת גיבוי מוצפן', `<p class="hint">בחר סיסמה לקובץ הגיבוי. בלי הסיסמה אי אפשר לפתוח אותו - גם לא אנחנו.</p>`
     + passFields('bk', [['p1', 'סיסמה לגיבוי (8 תווים לפחות)', 'new-password'], ['p2', 'שוב את הסיסמה', 'new-password']])
-    + `<button class="btn primary wide" id="bk-go" type="button">${ic('download')}הורדת קובץ הגיבוי</button>`, (sh, close) => {
+    + `<p class="hint">${ic('info')} בטלפון ייפתח חלון שיתוף: בחר "שמירה בקבצים", Google Drive או iCloud. אפשר להשתמש באותו קוד של האפליקציה.</p><button class="btn primary wide" id="bk-go" type="button">${ic('download')}שמירת הגיבוי</button>`, (sh, close) => {
     $('#bk-go', sh).onclick = async () => {
       const a = $('#bk-p1', sh).value, b = $('#bk-p2', sh).value;
       if (a.length < 8) return toast('הסיסמה קצרה מדי');
       if (a !== b) return toast('הסיסמאות לא זהות');
       const btn = $('#bk-go', sh); btn.disabled = true; btn.innerHTML = `<span class="spin"></span>מצפין…`;
       const text = await vault.exportBackup({ v: 1, settings: state.settings, tx: state.tx, at: new Date().toISOString() }, a);
-      download(`stashwise-backup-${new Date().toISOString().slice(0, 10)}.stash`, text);
-      close(); toast('קובץ הגיבוי ירד. שמור אותו במקום בטוח.');
+      const name = `stashwise-backup-${new Date().toISOString().slice(0, 10)}.stash`;
+      const file = new File([text], name, { type: 'application/octet-stream' });
+      let shared = false;
+      try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'גיבוי Stashwise' }); shared = true; } } catch (e) { if (e && e.name === 'AbortError') { btn.disabled = false; btn.innerHTML = `${ic('download')}שמירת הגיבוי`; return; } }
+      if (!shared) download(name, text);
+      state.settings.lastBackup = Date.now(); persist(true); changed('backup');
+      close(); toast(shared ? 'הגיבוי נשמר. כל הכבוד!' : 'קובץ הגיבוי ירד. שמור אותו במקום בטוח (למשל דרייב או iCloud).');
     };
   });
 }

@@ -1,5 +1,5 @@
 import * as vault from './vault.js';
-import { state, loadState, flushNow, bus, changed, persist } from './store.js';
+import { state, loadState, replaceAll, flushNow, bus, changed, persist } from './store.js';
 import { budgetKeyOf, isoOf, shiftKey, periodOf } from './calc.js';
 import { $, $$, esc, ic, toast, openSheet, monthName } from './util.js';
 import * as home from './views/home.js';
@@ -14,6 +14,9 @@ const MONTH_VIEWS = ['home', 'expenses', 'budget'];
 let view = 'home';
 
 /* ---------------- lock screen ---------------- */
+const MARK = 'stashwise-had-data';
+const markSet = () => { try { localStorage.setItem(MARK, String(Date.now())); } catch { } };
+const markGet = () => { try { return localStorage.getItem(MARK); } catch { return null; } };
 function lockScreen(mode) {
   const el = $('#lock');
   el.hidden = false; $('#app').hidden = true;
@@ -22,6 +25,7 @@ function lockScreen(mode) {
     <div class="lock-logo">${ic('wallet', 'big')}</div>
     <h1>Stashwise</h1>
     <p class="lock-sub">${setup ? 'התקציב החודשי שלך, נעול ומוצפן על המכשיר הזה בלבד.' : 'הזן את הקוד כדי לפתוח'}</p>
+    ${setup && markGet() ? `<div class="notice">${ic('warning')}<span>נראה שהדפדפן מחק את הנתונים שהיו כאן (עדכון של האפליקציה לא מוחק נתונים). אם יש לך קובץ גיבוי, בחר קוד ולחץ "שחזור מקובץ גיבוי".</span></div>` : ''}
     <form id="lock-form" class="lock-form" autocomplete="off" novalidate>
       ${setup ? `<div class="field"><label for="lk-name">איך לקרוא לך? (לא חובה)</label><input id="lk-name" type="text" maxlength="30" autocomplete="given-name"></div>` : ''}
       <div class="field"><label for="lk-pass">${setup ? 'בחר קוד פתיחה (לפחות 6 תווים)' : 'קוד פתיחה'}</label>
@@ -32,7 +36,7 @@ function lockScreen(mode) {
       <label class="check"><input type="checkbox" id="lk-rem" checked> <span>להישאר מחובר במכשיר הזה - בלי קוד בכל פתיחה (נעילת הטלפון שומרת עליו). אפשר לשנות במסך "עוד".</span></label>
       <div id="lk-err" class="form-err" role="alert" hidden></div>
       <button class="btn primary wide" id="lk-go" type="submit">${setup ? ic('lock-key') + 'יצירת כספת והתחלה' : ic('lock') + 'פתיחה'}</button>
-      ${setup ? '' : `<button class="link-btn" type="button" id="lk-forgot">שכחתי את הקוד</button>`}
+      ${setup ? `<label class="btn wide" for="lk-file">${ic('upload')}יש לי קובץ גיבוי - שחזור</label><input id="lk-file" type="file" accept=".stash,.kis,.shefa,application/json" hidden>` : `<button class="link-btn" type="button" id="lk-forgot">שכחתי את הקוד</button>`}
     </form>
     <p class="lock-foot">${ic('shield')} בלי חשבון, בלי שרת. הנתונים לא יוצאים מהמכשיר.</p></div>`;
   const pass = $('#lk-pass'), err = $('#lk-err'), go = $('#lk-go');
@@ -40,6 +44,24 @@ function lockScreen(mode) {
   $('#lk-eye').onclick = () => { pass.type = pass.type === 'password' ? 'text' : 'password'; };
   setTimeout(() => (setup ? $('#lk-name') : pass).focus(), 50);
   if (!setup) $('#lk-forgot').onclick = forgotFlow;
+  if (setup) $('#lk-file').onchange = e => {
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+    const p = pass.value;
+    if (p.length < 6 || p !== $('#lk-pass2').value) return showErr('קודם בחר קוד פתיחה חדש (פעמיים), ואז בחר את קובץ הגיבוי.');
+    openSheet('שחזור מגיבוי', `<p class="hint">הקובץ ${esc(file.name)} ייפתח עם הסיסמה שבחרת כשיצרת אותו.</p>
+      <div class="field"><label for="rb-p">סיסמת הגיבוי</label><input id="rb-p" type="password" autocomplete="current-password"></div>
+      <button class="btn primary wide" id="rb-go" type="button">${ic('upload')}שחזור</button>`, (sh, close) => {
+      $('#rb-go', sh).onclick = async () => {
+        const b = $('#rb-go', sh); b.disabled = true; b.innerHTML = '<span class="spin"></span>פותח…';
+        try {
+          const d = await vault.importBackup(await file.text(), $('#rb-p', sh).value);
+          await vault.create(p); replaceAll(d); await flushNow();
+          try { await vault.setRemember($('#lk-rem').checked); } catch { }
+          close(); markSet(); startApp(false); toast(`שוחזרו ${state.tx.length} תנועות`);
+        } catch (x) { b.disabled = false; b.innerHTML = `${ic('upload')}שחזור`; toast(x && x.code === 'wrong' ? 'הסיסמה שגויה' : 'זה לא קובץ גיבוי של Stashwise'); }
+      };
+    });
+  };
   $('#lock-form').onsubmit = async e => {
     e.preventDefault(); showErr('');
     const p = pass.value;
@@ -60,6 +82,7 @@ function lockScreen(mode) {
       }
       pass.value = '';
       try { await vault.setRemember($('#lk-rem').checked); } catch { }
+      markSet();
       startApp(setup);
     } catch (x) {
       go.disabled = false; go.innerHTML = setup ? ic('lock-key') + 'יצירת כספת והתחלה' : ic('lock') + 'פתיחה';
@@ -203,7 +226,7 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   try {
     if (!window.crypto || !crypto.subtle || !window.indexedDB) throw new Error('unsupported');
     if (await vault.exists()) {
-      if (await vault.openRemembered()) { await loadState(); startApp(false); return; }
+      if (await vault.openRemembered()) { await loadState(); markSet(); startApp(false); return; }
       lockScreen('unlock');
     } else lockScreen('setup');
   } catch {

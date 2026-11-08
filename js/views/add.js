@@ -270,11 +270,13 @@ function toRow(x, source) {
     note: cleanField(x.note, 120), fixedId: fx ? fx.id : null, on: true, dup: null, guessed: !!x.dateGuessed };
 }
 function buildReview(groupsRaw, source) {
-  const groups = groupsRaw.map(g => g.map(x => toRow(x, source)));
+  const groups = groupsRaw.map((g, gi) => g.map(x => ({ ...toRow(x, source), g: gi })));
   const rows = markDuplicates(groups, state.tx.filter(t => !t.ignored));
   rows.forEach(r => { if (r.dup) r.on = false; });
-  rows.sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')));
-  review = { rows, source, removed: 0 };
+  rows.sort((a, b) => a.g - b.g || (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')));
+  // purchases already saved without a card (or with another card) get the card this screenshot shows
+  const fixes = rows.filter(r => r.dup === 'saved' && r.card && state.tx.find(t => t.id === r.dupOf && t.card !== r.card)).length;
+  review = { rows, source, removed: 0, cardFixes: fixes, groups: groupsRaw.length };
 }
 
 function renderReview(el) {
@@ -293,13 +295,12 @@ function renderReview(el) {
         ${review.removed ? `<span class="chip lilac">${ic('shield')}${review.removed} פרטים רגישים נמחקו</span>` : ''}
         ${review.failed ? `<span class="chip">${review.failed} צילומים לא נקראו</span>` : ''}
       </div>
-      ${review.source !== 'bank' ? `<div class="card4"><span class="c4-ic">${ic('card')}</span><div class="field"><label for="rv-card">הכרטיס ששילם (4 ספרות אחרונות)</label>
-        <input id="rv-card" type="text" inputmode="numeric" maxlength="4" value="${esc(mainCard(R))}" placeholder="${mainCard(R) ? '' : 'לא זוהה - אפשר להקליד'}"></div></div>` : ''}
+      ${review.cardFixes ? `<p class="hint">${ic('card')} ${review.cardFixes} עסקאות שכבר שמורות יקבלו את הכרטיס שמופיע בצילום.</p>` : ''}
       ${review.source === 'screenshot' ? `<p class="hint">${ic('shield')} הצילומים כבר נמחקו מהזיכרון. בדוק שהשמות והסכומים נכונים - הקריאה מצילום לא תמיד מושלמת.</p>` : ''}
       ${fileBar}
       ${dups ? `<button class="link-btn left" id="rv-showdup" type="button">${review.showDup ? 'הסתר' : 'הצג'} את מה שסונן</button>` : ''}
     </section>
-    <div class="rev">${R.map((r, i) => (r.dup && !review.showDup) ? '' : `<div class="rev-row ${r.on ? '' : 'off'}" data-i="${i}">
+    <div class="rev">${R.map((r, i) => groupHead(R, i) + ((r.dup && !review.showDup) ? '' : `<div class="rev-row ${r.on ? '' : 'off'}" data-i="${i}">
       <input type="checkbox" data-k="on" ${r.on ? 'checked' : ''} aria-label="לשמור את ${esc(r.merchant)}">
       <div class="rev-main">
         <div class="rev-top"><b class="rev-name">${esc(r.merchant)}</b><b class="rev-amt">${money(r.amount, 'auto')}</b></div>
@@ -317,16 +318,16 @@ function renderReview(el) {
           <div class="field"><label for="rv-c4-${i}">כרטיס (4 ספרות)</label><input id="rv-c4-${i}" type="text" inputmode="numeric" maxlength="4" pattern="\\d{4}" data-k="card" value="${esc(r.card || '')}"></div>
           <div class="field"><label for="rv-k-${i}">סוג</label><select id="rv-k-${i}" data-k="kind">${kindOptions(r.kind)}</select></div>
         </div></details>
-      </div></div>`).join('')}</div>
+      </div></div>`)).join('')}</div>
     <div class="savebar"><span id="rv-sum"></span><button class="btn primary" id="rv-save" type="button">${ic('check')}שמירה</button></div>`;
   sum(el);
   $('#rv-cancel', el).onclick = () => { review = null; mode = null; render(el); };
-  const c4 = $('#rv-card', el);
-  if (c4) c4.addEventListener('change', () => {
-    const v = c4.value.replace(/\D/g, '');
+  $$('[data-gcard]', el).forEach(inp => inp.addEventListener('change', () => {
+    const g = +inp.dataset.gcard, v = inp.value.replace(/\D/g, '');
     if (v && v.length !== 4) { toast('רושמים בדיוק 4 ספרות'); return; }
-    R.forEach(r => (r.card = v || null)); renderReview(el); toast(v ? `כל העסקאות סומנו בכרטיס ${v}` : 'הכרטיס הוסר מהעסקאות');
-  });
+    R.filter(r => r.g === g).forEach(r => (r.card = v || null)); renderReview(el);
+    toast(v ? `העסקאות ${review.groups > 1 ? 'בצילום הזה ' : ''}סומנו בכרטיס ${v}` : 'הכרטיס הוסר');
+  }));
   const sd = $('#rv-showdup', el); if (sd) sd.onclick = () => { review.showDup = !review.showDup; renderReview(el); };
   $('#rv-save', el).onclick = () => save(el);
   if ($('#rv-type', el)) $('#rv-type', el).onchange = e => { fileCtx.type = e.target.value; rebuildFromFile(el); };
@@ -344,6 +345,14 @@ function renderReview(el) {
       sum(el);
     }));
   });
+}
+/** Header before the first row of each screenshot: which card paid, editable for that screenshot only. */
+function groupHead(R, i) {
+  if (review.source === 'bank') return '';
+  const r = R[i]; if (i > 0 && R[i - 1].g === r.g) return '';
+  const rows = R.filter(x => x.g === r.g), card = mainCard(rows), shown = rows.filter(x => !x.dup || review.showDup).length;
+  return `<div class="grp-h"><span class="c4-ic">${ic('card')}</span><div class="grp-t"><b>${review.groups > 1 ? `צילום ${r.g + 1}` : 'הכרטיס ששילם'}</b><small>${shown} עסקאות${rows.length > shown ? ` · ${rows.length - shown} כבר שמורות` : ''}</small></div>
+    <div class="field"><label for="g-card-${r.g}">4 ספרות</label><input id="g-card-${r.g}" data-gcard="${r.g}" type="text" inputmode="numeric" maxlength="4" value="${esc(card)}" placeholder="${card ? '' : '----'}"></div></div>`;
 }
 /** The card most of the rows were read with (from the top of the screenshot or the file title). */
 function mainCard(rows) {
@@ -366,7 +375,7 @@ function sum(el) {
   const on = review.rows.filter(r => r.on);
   const exp = on.filter(r => r.kind === 'expense').reduce((a, r) => a + num(r.amount), 0);
   $('#rv-sum', el).innerHTML = `<b>${on.length}</b> לשמירה${exp ? ' · ' + money(exp) : ''}`;
-  $('#rv-save', el).disabled = !on.length;
+  $('#rv-save', el).disabled = !on.length && !review.cardFixes;
 }
 function save(el) {
   const now = Date.now();
@@ -377,10 +386,12 @@ function save(el) {
   upsertTx(chosen.map((r, i) => ({ id: r.id, date: r.date, time: /^\d{2}:\d{2}$/.test(r.time || '') ? r.time : null, merchant: cleanField(r.merchant), place: cleanField(r.place, 40),
     card: /^\d{4}$/.test(r.card || '') ? r.card : null, amount: num(r.amount), kind: r.kind, category: r.category, fixedId: r.kind === 'expense' ? r.fixedId : null, installment: r.installment,
     foreign: r.foreign, note: r.note, source: review.source, added: now + i })));
+  const fix = review.rows.filter(r => r.dup === 'saved' && /^\d{4}$/.test(r.card || '')).map(r => { const t = state.tx.find(x => x.id === r.dupOf); return t && t.card !== r.card ? { ...t, card: r.card } : null; }).filter(Boolean);
+  if (fix.length) upsertTx(fix);
   const keys = [...new Set(chosen.map(r => budgetKeyOf(r.date, state.settings.startDay)))].sort();
   if (keys.length && !keys.includes(state.ui.curKey)) state.ui.curKey = keys[keys.length - 1];
   review = null; mode = null; fileCtx = null;
-  toast(`נשמרו ${chosen.length} תנועות`);
+  toast(`נשמרו ${chosen.length} תנועות${fix.length ? ` · ${fix.length} קיבלו כרטיס` : ''}`);
   location.hash = 'home';
   changed();
 }

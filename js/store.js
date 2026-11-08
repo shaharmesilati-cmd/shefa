@@ -25,6 +25,7 @@ export function normalizeSettings(d) {
   s.income = num(d.income);
   s.startDay = Math.min(28, Math.max(1, parseInt(d.startDay) || 1));
   s.autoLockMin = [1, 5, 15, 30].includes(+d.autoLockMin) ? +d.autoLockMin : 5;
+  s.lastBackup = Number(d.lastBackup) || 0;
   if (d.savings) s.savings = { mode: d.savings.mode === 'fixed' ? 'fixed' : 'percent', value: num(d.savings.value) };
   if (Array.isArray(d.goals)) s.goals = d.goals.map(g => ({ id: str(g.id) || uid(), name: str(g.name), target: num(g.target), monthly: num(g.monthly), saved: num(g.saved) }));
   if (Array.isArray(d.fixed)) s.fixed = d.fixed.map(f => ({ id: str(f.id) || uid(), name: str(f.name), amount: num(f.amount), keyword: str(f.keyword, 40) }));
