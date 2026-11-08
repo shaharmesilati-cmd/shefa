@@ -122,7 +122,7 @@ export async function readShots(files) {
     el.innerHTML = '';
     mode = null; render(el);
     $('#add-status', el).innerHTML = `<div class="notice bad">${ic('warning')}<span>${location.protocol === 'file:' || location.hostname === 'localhost'
-      ? 'קריאת צילומים עובדת רק באתר המותקן (הקבצים של מנוע הקריאה נוספים בזמן הפרסום). בינתיים אפשר להדביק טקסט או לטעון קובץ אקסל.'
+      ? 'קריאת צילומים לא זמינה כאן. אפשר להדביק טקסט או לטעון קובץ אקסל.'
       : 'לא הצלחתי להפעיל את קורא הצילומים. ודא שיש חיבור לאינטרנט בפעם הראשונה (כדי להוריד את מנוע הקריאה), ונסה שוב.'}</span></div>`;
     return;
   }
@@ -150,8 +150,10 @@ function renderPayslip(el, err) {
         <span class="opt-t"><b>בחירת צילום של התלוש</b><small>קורא על המכשיר. ת"ז, מספר חשבון, כתובת ונתוני מס נמחקים ולא נשמרים.</small></span>
         <input id="slip-in" type="file" accept="image/*" hidden></label>
       ${err ? `<div class="notice bad">${ic('warning')}<span>${esc(err)}</span></div>` : ''}
+      <button class="btn wide" id="slip-manual" type="button">${ic('pencil')}להקליד את המשכורת בעצמי</button>
       <p class="hint">${ic('info')} התלוש עצמו לא נשמר. נשמרים רק נטו, ברוטו, החודש ושם המעסיק.</p></section>`;
   $('#back', el).onclick = () => { mode = null; render(el); };
+  $('#slip-manual', el).onclick = () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); showSlipResult(el, { net: null, gross: null, monthKey: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, employer: '', removed: 0, manual: true }); };
   const inp = $('#slip-in', el);
   inp.onchange = () => { const f = inp.files[0]; inp.value = ''; if (f) readSlip(el, f); };
 }
@@ -169,7 +171,7 @@ async function readSlip(el, file) {
   } catch { failed = true; }
   await stopOcr();
   busy = null;
-  if (failed) { mode = 'payslip'; return renderPayslip(el, location.hostname === 'localhost' ? 'קריאת צילומים עובדת רק באתר המותקן.' : 'לא הצלחתי לקרוא את הצילום. נסה צילום חד וישר של התלוש.'); }
+  if (failed) { mode = 'payslip'; return renderPayslip(el, location.hostname === 'localhost' ? 'קריאת צילומים לא זמינה כאן. אפשר להקליד את המשכורת בעצמך.' : 'לא הצלחתי לקרוא את הצילום. נסה צילום חד וישר של התלוש.'); }
   showSlipResult(el, res);
 }
 
@@ -181,7 +183,7 @@ function showSlipResult(el, r) {
   const label = k => `${MN[+k.slice(5) - 1]} ${k.slice(0, 4)}`;
   el.innerHTML = `<section class="card slip-card">
       <div class="card-h"><h2>${ic('hand-coins')} מה מצאתי בתלוש</h2><button class="btn small ghost" id="sl-cancel" type="button">${ic('x')}ביטול</button></div>
-      ${r.net ? '' : `<div class="notice">${ic('warning')}<span>לא הצלחתי למצוא את השכר נטו. אפשר להקליד אותו.</span></div>`}
+      ${r.net || r.manual ? '' : `<div class="notice">${ic('warning')}<span>לא הצלחתי למצוא את השכר נטו. אפשר להקליד אותו.</span></div>`}
       <div class="slip-big"><span>נטו לתשלום</span><div class="field"><label for="sl-net" class="sr">נטו</label><input id="sl-net" type="number" inputmode="decimal" step="0.01" value="${r.net ?? ''}" placeholder="0"></div></div>
       <div class="row2">
         <div class="field"><label for="sl-gross">ברוטו</label><input id="sl-gross" type="number" inputmode="decimal" step="0.01" value="${r.gross ?? ''}"></div>
@@ -288,10 +290,10 @@ function renderReview(el) {
   const R = review.rows;
   const dups = R.filter(r => r.dup).length;
   const fileBar = review.file && fileCtx ? `<div class="filebar">
-      <div class="field"><label for="rv-type">סוג הקובץ</label><select id="rv-type">
+      <div class="field"><label for="rv-type">זה קובץ של</label><select id="rv-type">
         <option value="card" ${fileCtx.type === 'card' ? 'selected' : ''}>פירוט כרטיס אשראי</option>
         <option value="bank" ${fileCtx.type === 'bank' ? 'selected' : ''}>תנועות חשבון בנק</option></select></div>
-      <details><summary>התאמת עמודות</summary><div class="map-grid">${mapSelects()}</div></details></div>` : '';
+      <details><summary>הסכומים או השמות לא נקראו נכון? לתיקון</summary><div class="map-grid">${mapSelects()}</div></details></div>` : '';
   el.innerHTML = `<section class="card">
       <div class="card-h"><h2>בדיקה לפני שמירה</h2><button class="btn small ghost" id="rv-cancel" type="button">${ic('x')}ביטול</button></div>
       <div class="rv-stats">
@@ -311,7 +313,7 @@ function renderReview(el) {
         <div class="rev-top"><b class="rev-name">${esc(r.merchant)}</b><b class="rev-amt">${money(r.amount, 'auto')}</b></div>
         <div class="rev-meta">${ic('calendar')}<span>${shortDate(r.date)}${r.time ? ' · ' + esc(r.time) : ''}</span>${r.place ? `<span>· ${esc(r.place)}</span>` : ''}${r.card ? `<span class="chip">${ic('card')}${esc(r.card)}</span>` : ''}
           ${r.dup ? `<span class="chip warn">${r.dup === 'saved' ? 'כבר שמורה' : 'בצילום אחר'}</span>` : ''}
-          ${r.fixedId ? `<span class="chip lilac">${ic('lock')}קבועה</span>` : ''}${r.kind === 'expense' && r.category === 'other' ? `<span class="chip warn">${ic('question')}בחר קטגוריה</span>` : r.auto ? `<span class="chip good">${ic('sparkle')}סווג לבד</span>` : ''}${r.installment ? `<span class="chip">תשלום ${esc(r.installment)}</span>` : ''}
+          ${r.fixedId ? `<span class="chip lilac">${ic('lock')}קבועה</span>` : ''}${r.kind === 'card-payment' ? `<span class="chip">${ic('card')}חיוב האשראי - לא נספר</span>` : ''}${r.kind === 'income' ? `<span class="chip good">הכנסה</span>` : ''}${r.kind === 'expense' && r.category === 'other' ? `<span class="chip warn">${ic('question')}בחר קטגוריה</span>` : r.auto ? `<span class="chip good">${ic('sparkle')}סווג לבד</span>` : ''}${r.installment ? `<span class="chip">תשלום ${esc(r.installment)}</span>` : ''}
           ${r.foreign ? `<span class="chip peach">מט"ח</span>` : ''}${r.guessed ? `<span class="chip warn">בדוק תאריך</span>` : ''}${r.amount < 0 ? `<span class="chip good">זיכוי</span>` : ''}</div>
         <div class="rev-cat" ${r.kind === 'expense' ? '' : 'hidden'}><select data-k="category" aria-label="קטגוריה">${catOptions(r.category)}</select></div>
         <details class="rev-edit"><summary>${ic('pencil')}תיקון</summary><div class="rev-f">
@@ -379,7 +381,9 @@ function rebuildFromFile(el) {
 function sum(el) {
   const on = review.rows.filter(r => r.on);
   const exp = on.filter(r => r.kind === 'expense').reduce((a, r) => a + num(r.amount), 0);
-  $('#rv-sum', el).innerHTML = `<b>${on.length}</b> לשמירה${exp ? ' · ' + money(exp) : ''}`;
+  const inc = on.filter(r => r.kind === 'income').reduce((a, r) => a + num(r.amount), 0);
+  const skip = on.filter(r => r.kind === 'card-payment').length;
+  $('#rv-sum', el).innerHTML = `<b>${on.length}</b> לשמירה${exp ? ` · הוצאות ${money(exp)}` : ''}${inc ? ` · הכנסות ${money(inc)}` : ''}${skip ? ` · ${skip} לא נספרות` : ''}`;
   $('#rv-save', el).disabled = !on.length && !review.cardFixes;
 }
 function save(el) {

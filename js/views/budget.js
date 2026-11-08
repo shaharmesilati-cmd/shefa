@@ -3,21 +3,26 @@ import { monthSummary, autoSplit, budgetKeyOf, isoOf } from '../calc.js';
 import { $, $$, esc, ic, money, num, uid, toast, armConfirm, fmt0 } from '../util.js';
 import { catIcon } from './parts.js';
 
+const ICON_NAMES = { 'shopping-cart': 'עגלת קניות', 'fork-knife': 'אוכל', car: 'רכב', 't-shirt': 'בגדים', 'house-line': 'בית', 'first-aid': 'בריאות', popcorn: 'בילויים', wifi: 'תקשורת', gift: 'מתנה', 'dots-circle': 'שונות', coffee: 'קפה', airplane: 'טיסה', baby: 'תינוק', barbell: 'כושר', paw: 'חיות מחמד', book: 'ספר', lightning: 'חשמל', graduation: 'לימודים', gas: 'דלק', bus: 'תחבורה ציבורית', heart: 'לב', pill: 'תרופות', scissors: 'מספרה', game: 'משחקים', tag: 'תגית' };
 const save = () => { persist(); summaries(); };
+// The budget is the same for every month; numbers here are for the current month.
+const nowKey = () => budgetKeyOf(isoOf(new Date()), state.settings.startDay);
 
 function summaryHTML() {
-  const C = monthSummary(state.settings, state.tx, state.ui.curKey);
+  const C = monthSummary(state.settings, state.tx, nowKey());
   const un = C.unallocated;
   return `<div class="sumgrid">
-      <div class="stat"><span>הכנסה</span><b>${money(C.income)}</b></div>
+      <div class="stat"><span>${C.actualIncome > C.plannedIncome ? 'הכנסה בפועל החודש' : 'הכנסה'}</span><b>${money(C.income)}</b></div>
       <div class="stat"><span>קבועות</span><b>${money(C.fixedTotal)}</b></div>
       <div class="stat"><span>חיסכון</span><b>${money(C.savings)}</b></div>
       <div class="stat hl"><span>פנוי להוצאות</span><b>${money(C.available)}</b></div></div>
-    <div class="unalloc ${un < 0 ? 'bad' : un > 0 ? '' : 'ok'}">${un > 0 ? `חולקו לקטגוריות ${money(C.allocated)} · <b>עוד לא חולק ${money(un)}</b>`
+    <div class="unalloc ${C.available <= 0 || un < 0 ? 'bad' : un > 0 ? '' : 'ok'}">${!C.income ? `${ic('info')} הזן הכנסה חודשית כדי לראות כמה פנוי להוצאות.`
+      : C.available <= 0 ? `ההוצאות הקבועות והחיסכון גבוהים מההכנסה. אין סכום פנוי להוצאות.`
+      : un > 0 ? `חולקו לקטגוריות ${money(C.allocated)} · <b>עוד לא חולק ${money(un)}</b>`
       : un === 0 ? `${ic('check')} כל הסכום הפנוי חולק לקטגוריות` : `חילקת ${money(-un)} יותר ממה שפנוי. הורד תקציב באחת הקטגוריות.`}</div>`;
 }
 function savingsLine() {
-  const C = monthSummary(state.settings, state.tx, state.ui.curKey);
+  const C = monthSummary(state.settings, state.tx, nowKey());
   const g = state.settings.goals.reduce((a, x) => a + x.monthly, 0);
   return `חיסכון חודשי: <b>${money(C.savings)}</b>${state.settings.goals.length ? ` · מתוכם ליעדים ${money(g)}${g > C.savings ? ' <span class="t-bad">(יותר מהחיסכון)</span>' : ''}` : ''}`;
 }
@@ -33,7 +38,7 @@ export function update(el, detail) {
 
 export function render(el) {
   const S = state.settings;
-  const SPENT = monthSummary(S, state.tx, state.ui.curKey);
+  const SPENT = monthSummary(S, state.tx, nowKey());
   el.innerHTML = `
   <section class="card"><div class="card-h"><h2>${ic('hand-coins')} הכנסה</h2></div>
     <div class="row2">
@@ -76,7 +81,7 @@ export function render(el) {
       ${c.id === 'other' ? '<span></span>' : `<button class="icon-btn del" data-del-c="${c.id}" aria-label="מחיקת ${esc(c.name)}" type="button">${ic('trash')}</button>`}</div>`; }).join('')}</div>
     <details class="newcat"><summary>${ic('plus')} קטגוריה חדשה</summary>
       <div class="field"><label for="nc-n">שם</label><input id="nc-n" type="text" placeholder="למשל: חיות מחמד" maxlength="40"></div>
-      <div class="icon-pick" role="radiogroup" aria-label="סמל">${CAT_ICONS.map((n, i) => `<button type="button" role="radio" aria-checked="${i === CAT_ICONS.length - 1}" data-ico="${n}" class="${i === CAT_ICONS.length - 1 ? 'on' : ''}" aria-label="${n}">${ic(n)}</button>`).join('')}</div>
+      <div class="icon-pick" role="radiogroup" aria-label="סמל">${CAT_ICONS.map((n, i) => `<button type="button" role="radio" aria-checked="${i === CAT_ICONS.length - 1}" data-ico="${n}" class="${i === CAT_ICONS.length - 1 ? 'on' : ''}" aria-label="${ICON_NAMES[n] || 'סמל'}">${ic(n)}</button>`).join('')}</div>
       <button class="btn small primary" id="nc-add" type="button">${ic('plus')}הוספה</button></details></section>
 
   <details class="card explain"><summary><h2>${ic('question')} איך מחושב "אפשר להוציא היום"?</h2></summary>
@@ -90,7 +95,12 @@ function wire(el) {
   $('#bd-inc', el).oninput = e => { S.income = num(e.target.value); save(); };
   $('#bd-sd', el).onchange = e => { S.startDay = +e.target.value; state.ui.curKey = budgetKeyOf(isoOf(new Date()), S.startDay); persist(); changed('month'); };
   $('#sv-v', el).oninput = e => { S.savings.value = num(e.target.value); save(); };
-  $$('[data-svm]', el).forEach(b => b.onclick = () => { S.savings.mode = b.dataset.svm; persist(); render(el); });
+  $$('[data-svm]', el).forEach(b => b.onclick = () => {
+    const to = b.dataset.svm; if (to === S.savings.mode) return;
+    const inc = monthSummary(S, state.tx, nowKey()).income, v = S.savings.value || 0;
+    S.savings.value = to === 'fixed' ? Math.round(inc * v / 100) : (inc ? Math.round(v / inc * 1000) / 10 : 0);
+    S.savings.mode = to; persist(); render(el);
+  });
   $$('[data-fx]', el).forEach(i => i.oninput = () => { const f = S.fixed.find(x => x.id === i.dataset.fx); f[i.dataset.k] = i.dataset.k === 'amount' ? num(i.value) : i.value; save(); });
   $$('[data-g]', el).forEach(i => i.oninput = () => { const g = S.goals.find(x => x.id === i.dataset.g); g[i.dataset.k] = i.dataset.k === 'name' ? i.value : num(i.value); save(); });
   $$('[data-c]', el).forEach(i => i.oninput = () => { const c = S.categories.find(x => x.id === i.dataset.c); c[i.dataset.k] = i.dataset.k === 'budget' ? num(i.value) : i.value; save(); });
@@ -101,7 +111,7 @@ function wire(el) {
   $('#fx-add', el).onclick = () => { const f = { id: uid(), name: '', amount: 0, keyword: '' }; S.fixed.push(f); persist(); render(el); $('#fx-n-' + f.id).focus(); };
   $('#g-add', el).onclick = () => { const g = { id: uid(), name: '', target: 0, monthly: 0, saved: 0 }; S.goals.push(g); persist(); render(el); $('#g-n-' + g.id).focus(); };
   $('#auto', el).onclick = () => {
-    const C = monthSummary(S, state.tx, state.ui.curKey);
+    const C = monthSummary(S, state.tx, nowKey());
     if (C.available <= 0) { toast('אין סכום פנוי לחלוקה. בדוק הכנסה, קבועות וחיסכון.'); return; }
     S.categories = autoSplit(S.categories, C.available); persist(); render(el); toast('התקציב חולק. אפשר לשנות כל סכום.');
   };

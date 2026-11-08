@@ -11,7 +11,7 @@ import { readShots } from './views/add.js';
 import { classify, historyOf, AUTO } from './categorize.js';
 
 const VIEWS = { home, expenses, add, budget, more };
-const MONTH_VIEWS = ['home', 'expenses', 'budget'];
+const MONTH_VIEWS = ['home', 'expenses'];
 let view = 'home';
 
 /* ---------------- lock screen ---------------- */
@@ -34,7 +34,7 @@ function lockScreen(mode) {
         <button type="button" class="icon-btn" id="lk-eye" aria-label="הצג קוד">${ic('eye')}</button></div></div>
       ${setup ? `<div class="field"><label for="lk-pass2">שוב את אותו קוד</label><input id="lk-pass2" type="password" autocomplete="new-password" required></div>
         <label class="check"><input type="checkbox" id="lk-ok"> <span>הבנתי: אין שום דרך לשחזר קוד שנשכח. בלי הקוד הנתונים לא נפתחים, ולכן כדאי לגבות מדי פעם.</span></label>` : ''}
-      <label class="check"><input type="checkbox" id="lk-rem" checked> <span>להישאר מחובר במכשיר הזה - בלי קוד בכל פתיחה (נעילת הטלפון שומרת עליו). אפשר לשנות במסך "עוד".</span></label>
+      <label class="check"><input type="checkbox" id="lk-rem" ${setup ? 'checked' : ''}> <span>להישאר מחובר במכשיר הזה - בלי קוד בכל פתיחה (נעילת הטלפון שומרת עליו). אפשר לשנות במסך "עוד".</span></label>
       <div id="lk-err" class="form-err" role="alert" hidden></div>
       <button class="btn primary wide" id="lk-go" type="submit">${setup ? ic('lock-key') + 'בואו נתחיל' : ic('lock') + 'פתיחה'}</button>
       ${setup ? `<label class="btn wide" for="lk-file">${ic('upload')}יש לי קובץ גיבוי - שחזור</label><input id="lk-file" type="file" accept=".stash,.kis,.shefa,application/json" hidden>` : `<button class="link-btn" type="button" id="lk-forgot">שכחתי את הקוד</button>`}
@@ -88,7 +88,11 @@ function lockScreen(mode) {
     } catch (x) {
       go.disabled = false; go.innerHTML = setup ? ic('lock-key') + 'בואו נתחיל' : ic('lock') + 'פתיחה';
       if (x && x.code === 'wrong') showErr(x.fails >= 5 ? 'קוד שגוי. בגלל כמה ניסיונות שגויים צריך לחכות לפני הניסיון הבא.' : 'הקוד שגוי. נסה שוב.');
-      else if (x && x.code === 'wait') showErr(`יותר מדי ניסיונות שגויים. אפשר לנסות שוב בעוד ${x.seconds} שניות.`);
+      else if (x && x.code === 'wait') {
+        let n = x.seconds; go.disabled = true;
+        const tick = () => { if (!err.isConnected) return clearInterval(iv); if (n <= 0) { clearInterval(iv); showErr(''); go.disabled = false; return; } showErr(`יותר מדי ניסיונות שגויים. אפשר לנסות שוב בעוד ${n} שניות.`); n--; };
+        const iv = setInterval(tick, 1000); tick();
+      }
       else showErr('משהו לא עבד. ודא שהדפדפן לא במצב גלישה פרטית ונסה שוב.');
       pass.select();
     }
@@ -171,6 +175,7 @@ function renderHeader() {
 }
 
 export function show(v) {
+  const tt = document.getElementById('toast'); if (tt && !tt.dataset.keep) tt.hidden = true;
   view = VIEWS[v] ? v : 'home';
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
   for (const id of Object.keys(VIEWS)) $('#view-' + id).hidden = id !== view;

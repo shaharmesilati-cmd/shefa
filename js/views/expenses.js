@@ -46,7 +46,7 @@ function list(el) {
   else if (f.cat.startsWith('card:')) tx = tx.filter(t => t.card === f.cat.slice(5));
   else if (f.cat) tx = tx.filter(t => exp(t) && catById(t.category).id === f.cat);
   const spend = tx.filter(exp).reduce((a, t) => a + t.amount, 0);
-  $('#ex-total', el).innerHTML = `${tx.length} תנועות${spend ? ' · הוצאות ' + money(spend) : ''}`;
+  $('#ex-total', el).innerHTML = `${tx.length} תנועות${spend ? ' · הוצאות ' + money(spend, 'auto') : ''}`;
   const L = $('#ex-list', el);
   if (!tx.length) {
     L.innerHTML = `<div class="empty">${ic(q || f.cat ? 'search' : 'receipt', 'big')}<p>${q || f.cat ? 'לא נמצאו תנועות שמתאימות.' : 'אין תנועות בחודש הזה.'}</p>${q || f.cat ? '' : `<a class="btn small primary" href="#add">${ic('plus')}הוספת הוצאות</a>`}</div>`;

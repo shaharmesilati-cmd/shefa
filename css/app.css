@@ -498,3 +498,26 @@ body { background: #FFFFFF; }
 .crow-n { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .crow-n small { font-size: .74rem; color: var(--muted); padding-inline-start: 4px; }
 .crow { align-items: start; } .crow > .cat-ic, .crow > .icon-btn { margin-top: 4px; }
+
+/* review pass: fit small phones, bigger touch targets */
+.search input[type=search] { padding-inline-start: 40px; }
+.crow { grid-template-columns: 38px minmax(0, 1fr) 92px 44px; }
+.crow input[type=number] { text-align: center; padding-inline: 6px; }
+.icon-btn { width: 44px; height: 44px; }
+.month > button:not(.m-today) { width: 38px; height: 38px; }
+@media (max-width: 420px) { .month > button:not(.m-today) { width: 36px; height: 36px; } .m-mid { min-width: 76px; } }
+.newcat summary { min-height: 44px; }
+.m-today { white-space: nowrap; }
+.chip { white-space: nowrap; }
+.empty-month { align-items: center; text-align: center; padding: 28px 18px; }
+.empty-month p { color: var(--muted); }
+.empty-month .ic { color: var(--primary); }
+.toast { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.toast-act { background: none; border: 0; color: #9EC2FF; font-weight: 700; padding: 4px 6px; min-height: 36px; }
+@media (min-width: 760px) { .wrap { padding-bottom: 140px; } }
+@media (max-width: 420px) {
+  .crow { grid-template-columns: 34px minmax(0, 1fr) 72px 36px; gap: 6px; }
+  .crow .cat-ic { width: 34px; height: 34px; }
+  .crow .icon-btn { width: 36px; }
+  .crow input[type=text] { padding-inline: 8px; }
+}

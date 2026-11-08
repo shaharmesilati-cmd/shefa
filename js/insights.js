@@ -50,7 +50,7 @@ export function monthInsights(settings, tx, key, today = new Date()) {
   }
 
   // expected surplus -> goal
-  if (C.isCurrent && C.elapsed > 2 && C.projectedEnd > 200 && settings.goals.length) {
+  if (C.isCurrent && C.elapsed >= 5 && C.projectedEnd > 200 && settings.goals.length) {
     const g = settings.goals.find(x => x.target > x.saved) || settings.goals[0];
     out.push({ tone: 'good', icon: 'target', text: `צפוי לך עודף של כ-₪${Math.round(C.projectedEnd).toLocaleString('he-IL')} בסוף החודש. אפשר להעביר אותו ל"${g.name || 'יעד החיסכון'}".` });
   }

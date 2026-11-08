@@ -2,6 +2,7 @@ import { state, catById, upsertTx, removeTx, persist, changed } from '../store.j
 import { $, esc, ic, money, num, uid, shortDate, openSheet, toast, armConfirm } from '../util.js';
 import { isoOf, normMerchant } from '../calc.js';
 import { cleanField } from '../sanitize.js';
+import { classify, historyOf, AUTO } from '../categorize.js';
 
 export const catIcon = c => `<span class="cat-ic" style="--c:${c.color}">${ic(c.icon)}</span>`;
 
@@ -9,7 +10,7 @@ export function txRow(t) {
   const c = catById(t.category);
   const f = t.fixedId && state.settings.fixed.find(x => x.id === t.fixedId);
   const kind = t.kind === 'income' ? `<span class="chip good">${ic('arrow-down')}הכנסה</span>`
-    : t.kind === 'card-payment' ? `<span class="chip">${ic('card')}תשלום כרטיס - לא נספר</span>` : '';
+    : t.kind === 'card-payment' ? `<span class="chip">${ic('card')}לא נספר</span>` : '';
   const isIncome = t.kind === 'income';
   return `<button class="tx" data-tx="${esc(t.id)}" type="button">
     ${isIncome ? `<span class="cat-ic" style="--c:#21A38A">${ic('hand-coins')}</span>` : catIcon(c)}
@@ -46,10 +47,15 @@ export function openTxSheet(t) {
       <button class="btn primary" id="sh-ok" type="button">${ic('check')}שמירה</button></div>`, (sh, close) => {
     const sync = () => { const k = $('#sh-k', sh).value; $('#sh-cw', sh).hidden = k !== 'expense'; const fw = $('#sh-fw', sh); if (fw) fw.hidden = k !== 'expense'; };
     $('#sh-k', sh).onchange = sync; sync();
+    if (isNew) $('#sh-m', sh).addEventListener('change', () => {
+      const S = state.settings, r = classify($('#sh-m', sh).value, { rules: S.rules, ids: new Set(S.categories.map(c => c.id)), history: historyOf(state.tx) });
+      if (r.conf >= AUTO) $('#sh-c', sh).value = r.cat;
+    });
     if (!isNew) armConfirm($('#sh-del', sh), () => { removeTx(t.id); close(); changed(); toast('נמחק'); }, 'לחץ שוב למחיקה');
     $('#sh-ok', sh).onclick = () => {
       const merchant = $('#sh-m', sh).value.trim(), amount = num($('#sh-a', sh).value), date = $('#sh-d', sh).value;
       if (!merchant || !amount || !/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast('צריך למלא שם, סכום ותאריך'); return; }
+      if (amount < 0) { toast('סכום לא יכול להיות שלילי. החזר כספי? בחר סוג "הכנסה".'); return; }
       const kind = $('#sh-k', sh).value, cat = $('#sh-c', sh).value;
       if (kind === 'expense' && (isNew || cat !== t.category)) { state.settings.rules[normMerchant(merchant)] = cat; persist(); }
       const time = $('#sh-t', sh).value, place = cleanField($('#sh-p', sh).value, 40);

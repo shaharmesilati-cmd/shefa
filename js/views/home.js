@@ -24,22 +24,29 @@ export function render(el) {
   parts.push(`<p class="greet">${greeting()}</p>`);
 
   // first run: just the three steps
-  if (!S.income && !state.tx.length) {
+  if (!S.income && !state.tx.length && !S.fixed.length && !S.goals.length && !S.categories.some(c => c.budget > 0)) {
     parts.push(`<section class="card welcome"><span class="w-ic">${ic('wallet')}</span><h2>ברוך הבא ל-Stashwise</h2>
       <p>שני צעדים ואתה רואה כמה מותר להוציא היום, בלי לחשוב.</p>
       <a class="btn primary wide" href="#budget">${ic('hand-coins')}1. כמה נכנס לי בחודש</a>
-      <a class="btn wide" href="#add">${ic('scan')}2. צילום מסך מהאשראי</a></section>`);
+      <a class="btn wide" href="#add">${ic('plus')}2. הוספת ההוצאות של החודש</a></section>`);
+    el.innerHTML = parts.join(''); return;
+  }
+
+  if (!C.isCurrent && !C.inPeriod.length) {
+    parts.push(`<section class="card empty-month">${ic('calendar', 'big')}<h2>אין נתונים ל${past ? 'חודש הזה' : 'חודש שעוד לא התחיל'}</h2>
+      <p>${past ? 'אפשר להוסיף הוצאות של החודש הזה מקובץ, מצילום או ידנית.' : 'כשהחודש יתחיל, תראה כאן כמה מותר להוציא בכל יום.'}</p>
+      ${past ? `<a class="btn small primary" href="#add">${ic('plus')}הוספת הוצאות</a>` : ''}</section>`);
     el.innerHTML = parts.join(''); return;
   }
 
   // hero ring: share of this month's spending money that is still left
   const left = C.available > 0 ? Math.max(0, C.remaining) / C.available : 0;
-  const big = past || future ? Math.abs(C.remaining) : Math.max(0, C.daily);
+  const big = C.remaining < 0 || past || future ? Math.abs(C.remaining) : Math.max(0, C.daily);
   const label = C.remaining < 0 ? 'חרגת החודש ב-' : past ? 'נשאר בסוף החודש' : future ? 'יהיה לך להוציא החודש' : 'אפשר להוציא היום';
   const sub = C.remaining < 0 ? 'מהיום כל שקל שנחסך מצמצם את החריגה'
     : past || future ? `${C.total} ימים · תקציב ${money(C.available)}`
     : `נשאר לחודש ${money(C.remaining)} · ${C.daysLeft} ימים`;
-  const fc = C.isCurrent && C.elapsed > 2 && C.available > 0
+  const fc = C.isCurrent && C.elapsed >= 5 && C.available > 0
     ? (C.projectedEnd >= 0 ? `<span class="fc ok">${ic('trend-up')}בקצב הזה תסיים עם עודף של ${money(C.projectedEnd)}</span>`
       : `<span class="fc bad">${ic('trend-down')}בקצב הזה תחרוג בכ-${money(-C.projectedEnd)}</span>`) : '';
   parts.push(`<section class="hero2 ${C.status}">
@@ -55,7 +62,7 @@ export function render(el) {
   parts.push(nextStep(S, C, key));
 
   // savings goal + streak
-  const streak = budgetStreak(S, state.tx);
+  const streak = C.isCurrent && C.status !== 'over' ? budgetStreak(S, state.tx) : 0;
   const g = S.goals.find(x => x.target > x.saved) || S.goals[0];
   if (g || streak) {
     const p = g && g.target ? Math.min(100, g.saved / g.target * 100) : 0;
@@ -117,7 +124,7 @@ function nextStep(S, C, key) {
       <div class="ib-top"><b>${esc(t.merchant)}</b><b>${money(t.amount, 'auto')}</b></div>
       <div class="ib-meta">${shortDate(t.date)}${t.time ? ' · ' + esc(t.time) : ''}${t.place ? ' · ' + esc(t.place) : ''}</div>
       <div class="chips">${quick.map(c => `<button type="button" class="qchip" data-cat="${esc(c.id)}" style="--c:${c.color}">${ic(c.icon)}${esc(c.name)}</button>`).join('')}
-        <button type="button" class="qchip more" data-more="1">${ic('dots')}עוד</button><button type="button" class="qchip keep" data-keep="1">דלג</button></div></section>`;
+        <button type="button" class="qchip more" data-more="1">${ic('dots')}כל הקטגוריות</button><button type="button" class="qchip keep" data-keep="1">דלג</button></div></section>`;
   }
   const hasSlip = C.inPeriod.some(t => t.kind === 'income' && t.source === 'payslip');
   if (C.isCurrent && !hasSlip && new Date().getDate() >= 5)
@@ -136,7 +143,7 @@ function nextStep(S, C, key) {
   return `<section class="card next goodc"><div class="nx-h"><span class="nx-ic">${ic('check')}</span><b>הכל מסודר</b></div><p>אין כרגע מה לעשות. נתראה בקנייה הבאה.</p></section>`;
 }
 
-function classify(id, catId) {
+function classify(id, catId, skipped = false) {
   const t = state.tx.find(x => x.id === id); if (!t) return;
   const generic = isGenericMerchant(t.merchant);
   const n = normMerchant(t.merchant);
@@ -144,7 +151,7 @@ function classify(id, catId) {
   if (!generic && catId !== 'other') { state.settings.rules[n] = catId; persist(); }
   upsertTx(list.map(x => ({ ...x, category: catId, confirmed: true })));
   changed();
-  toast(catId === 'other' ? 'דילגת' : `סווג ל"${catById(catId).name}"${list.length > 1 ? ` (${list.length} קניות)` : ''}${generic ? '' : ' · נלמד לפעם הבאה'}`);
+  toast(skipped ? 'נשאר בשונות. אפשר לשנות בכל רגע ברשימת התנועות.' : catId === 'other' ? 'סווג ל"שונות"' : `סווג ל"${catById(catId).name}"${list.length > 1 ? ` (${list.length} קניות)` : ''}${generic ? '' : ' · נלמד לפעם הבאה'}`);
 }
 
 function wire(el, cats) {
@@ -152,7 +159,7 @@ function wire(el, cats) {
   if (ask) {
     const id = ask.dataset.ib;
     ask.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => classify(id, b.dataset.cat));
-    ask.querySelector('[data-keep]').onclick = () => classify(id, 'other');
+    ask.querySelector('[data-keep]').onclick = () => classify(id, 'other', true);
     ask.querySelector('[data-more]').onclick = () => {
       openSheet('בחירת קטגוריה', `<div class="chips big">${state.settings.categories.map(c => `<button type="button" class="qchip" data-c="${esc(c.id)}" style="--c:${c.color}">${ic(c.icon)}${esc(c.name)}</button>`).join('')}</div>`, (sh, close) => {
         sh.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { close(); classify(id, b.dataset.c); });

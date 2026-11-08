@@ -62,7 +62,9 @@ export function monthSummary(settings, allTx, key, today = new Date()) {
   let status = 'good';
   if (remaining < 0) status = 'over';
   else if (isCurrent && available > 0 && spent > expectedByNow * 1.15 && spent - expectedByNow > 50) status = 'watch';
-  const projectedSpend = isCurrent && elapsed > 2 ? spent / elapsed * total : spent;
+  // big one-off purchases (a quarter of the month's money or more) are not projected forward
+  const oneOff = available > 0 ? variable.filter(t => t.amount >= available * 0.25).reduce((a, t) => a + t.amount, 0) : 0;
+  const projectedSpend = isCurrent && elapsed >= 5 ? oneOff + (spent - oneOff) / elapsed * total : spent;
   const projectedEnd = available - projectedSpend;
 
   const byCat = {};

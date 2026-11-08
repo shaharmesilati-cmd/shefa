@@ -20,10 +20,14 @@ export const monthName = key => { const [y, m] = key.split('-').map(Number); ret
 export const shortDate = iso => { const [, m, d] = iso.split('-'); return `${+d}.${+m}`; };
 
 let toastTimer;
-export function toast(msg) {
+export function toast(msg, action) {
   const t = $('#toast');
-  t.textContent = msg; t.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 3200);
+  t.textContent = msg; t.hidden = false; delete t.dataset.keep;
+  if (action) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'toast-act'; b.textContent = action.label;
+    b.onclick = () => { t.hidden = true; action.fn(); }; t.append(' ', b); t.dataset.keep = '1';
+  }
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; delete t.dataset.keep; }, action ? 7000 : 3200);
 }
 
 /** Two-tap confirm for destructive buttons (no browser dialogs). */

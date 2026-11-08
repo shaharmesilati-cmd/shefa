@@ -4,11 +4,13 @@ import { $, esc, ic, toast, openSheet, download, armConfirm, monthName } from '.
 import { budgetKeyOf } from '../calc.js';
 import { install, lockNow, session, startAutoLock, stopAutoLock } from '../app.js';
 
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
 export function update(el, detail) { if (detail === 'install' || !el.contains(document.activeElement)) render(el); }
+
+const monthsWithData = () => [...new Set(state.tx.map(t => budgetKeyOf(t.date, state.settings.startDay)))].sort().reverse();
 
 export function render(el) {
   const S = state.settings;
@@ -21,7 +23,7 @@ export function render(el) {
 
   <section class="card"><div class="card-h"><h2>${ic('shield')} פרטיות ואבטחה</h2></div>
     <ul class="facts">
-      <li>${ic('lock-key')}<span>כל הנתונים מוצפנים (AES-256) ונשמרים רק במכשיר הזה. הקוד שלך הוא המפתח.</span></li>
+      <li>${ic('lock-key')}<span>כל הנתונים מוצפנים בהצפנה חזקה ונשמרים רק במכשיר הזה. הקוד שלך הוא המפתח.</span></li>
       <li>${ic('x')}<span>אין חשבון, אין שרת ואין מעקב. האפליקציה חסומה טכנית מלשלוח מידע לאינטרנט.</span></li>
       <li>${ic('bank')}<span>Stashwise לא מבקשת סיסמאות של הבנק או של האשראי, אף פעם. את הקבצים אתה מוריד בעצמך.</span></li>
     </ul>
@@ -46,8 +48,9 @@ export function render(el) {
     <div class="btn-row"><button class="btn" id="upd" type="button">${ic('refresh')}בדיקת עדכונים</button></div></section>
 
   <section class="card"><div class="card-h"><h2>${ic('calendar')} ניקוי חודש</h2></div>
-    <p class="hint">מוחק רק את התנועות של ${monthName(state.ui.curKey)} (ההגדרות והתקציב נשארים). שימושי אם העלית קובץ לא נכון.</p>
-    <button class="btn danger" id="wipe-month" type="button">${ic('trash')}מחיקת התנועות של ${monthName(state.ui.curKey)}</button></section>
+    <p class="hint">מוחק רק את התנועות של החודש שתבחר (ההגדרות והתקציב נשארים). שימושי אם העלית קובץ לא נכון.</p>
+    ${monthsWithData().length ? `<div class="field"><label for="wm-k">איזה חודש</label><select id="wm-k">${monthsWithData().map(k => `<option value="${k}">${monthName(k)} (${state.tx.filter(t => budgetKeyOf(t.date, state.settings.startDay) === k).length} תנועות)</option>`).join('')}</select></div>
+    <button class="btn danger" id="wipe-month" type="button">${ic('trash')}מחיקת התנועות של החודש</button>` : '<p class="muted small">אין עדיין תנועות.</p>'}</section>
 
   <section class="card danger-zone"><div class="card-h"><h2>${ic('warning')} מחיקת כל הנתונים</h2></div>
     <p class="hint">מוחק מהמכשיר הזה את כל התנועות, ההגדרות והקוד. אי אפשר לבטל, לכן כדאי לגבות קודם.</p>
@@ -73,10 +76,11 @@ export function render(el) {
   $('#bk', el).onclick = backup;
   $('#rs', el).onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) restore(f); };
   $('#wipe', el).onclick = wipe;
-  armConfirm($('#wipe-month', el), () => {
-    const sd = state.settings.startDay, k = state.ui.curKey, before = state.tx.length;
-    state.tx = state.tx.filter(t => budgetKeyOf(t.date, sd) !== k); persist(true); changed();
-    toast(`נמחקו ${before - state.tx.length} תנועות`); render(el);
+  if ($('#wipe-month', el)) armConfirm($('#wipe-month', el), () => {
+    const sd = state.settings.startDay, k = $('#wm-k', el).value;
+    const removed = state.tx.filter(t => budgetKeyOf(t.date, sd) === k);
+    state.tx = state.tx.filter(t => budgetKeyOf(t.date, sd) !== k); persist(true); changed(); render(el);
+    toast(`נמחקו ${removed.length} תנועות של ${monthName(k)}`, { label: 'ביטול', fn: () => { state.tx = state.tx.concat(removed); persist(true); changed(); render(el); toast('התנועות הוחזרו'); } });
   }, 'לחץ שוב כדי למחוק');
 }
 
