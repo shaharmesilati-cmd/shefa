@@ -4,6 +4,7 @@
 import { readImage, stopOcr } from './js/ocr.js';
 import { parseStatement } from './js/paste.js';
 import { parsePayslip } from './js/payslip.js';
+import { readPdf } from './js/pdf.js';
 const out = {};
 try {
   for (const n of ['light', 'dark']) {
@@ -13,6 +14,11 @@ try {
   }
   const iz = await (await fetch('fixtures/sample-isracard-card.png')).blob();
   out.cardPage = parseStatement(await readImage(iz), new Date(2026, 10, 8, 15));
+  for (const n of ['statement', 'bank']) {
+    const f = await (await fetch(`fixtures/sample-${n}.pdf`)).blob();
+    const r = await readPdf(new File([f], `${n}.pdf`, { type: 'application/pdf' }));
+    out['pdf_' + n] = { bank: r.bank, rows: parseStatement(r.text, new Date(2026, 10, 8)).rows };
+  }
   const slip = await (await fetch('fixtures/sample-payslip.png')).blob();
   const slipText = await readImage(slip);
   out.payslipText = slipText; // sample data only - helps diagnose a failure

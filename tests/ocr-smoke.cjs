@@ -28,6 +28,10 @@ const server = http.createServer((req, res) => {
   // Isracard card page: section totals, titles, the "back to top" button and the legal footer must NOT become purchases
   const cp = out.cardPage.rows.map(r => [r.amount, r.card]);
   if (JSON.stringify(cp) !== JSON.stringify([[120, '1111'], [45.5, '1111'], [60, '1111']])) throw new Error('card page: wrong purchases ' + JSON.stringify(out.cardPage.rows));
+  const ps = out.pdf_statement.rows.map(r => [r.amount, r.card, r.installment]);
+  if (JSON.stringify(ps) !== JSON.stringify([[214.9, '7781', null], [400, '7781', '1/3'], [89.9, '7781', null], [180, '7781', null]])) throw new Error('card PDF: wrong purchases ' + JSON.stringify(out.pdf_statement));
+  const pb = out.pdf_bank.rows.map(r => [r.amount, r.kind || 'expense']);
+  if (!out.pdf_bank.bank || JSON.stringify(pb) !== JSON.stringify([[13500, 'income'], [4200, 'expense']])) throw new Error('bank PDF: wrong rows ' + JSON.stringify(out.pdf_bank));
   const p = out.payslip;
   if (p.net !== 12345.67) console.log('payslip text:\n' + out.payslipText);
   if (p.net !== 12345.67 || p.gross !== 16200 || p.monthKey !== '2026-10') throw new Error('payslip: wrong numbers ' + JSON.stringify(p));

@@ -49,6 +49,7 @@ export function parseStatement(text, today = new Date()) {
       const m4 = line.match(/(?<![\d.,:\/₪-])(\d{4})\s*$/);
       if (m4 && !/\d/.test(line.slice(0, m4.index)) && !SKIP.test(line) && !isYearLine(line, +m4[1])) { tokens.push({ t: 'cardctx', v: m4[1] }); continue; }
     }
+    const inc = line.includes('⟦IN⟧'); if (inc) line = line.replace(/⟦IN⟧/g, ' ').trim(); // money that came IN (bank 'זכות' column)
     const cm = [...line.matchAll(/⟦C(\d{4})⟧/g)];
     if (cm.length) { tokens.push({ t: 'cardctx', v: cm[cm.length - 1][1] }); line = line.replace(/⟦C\d{4}⟧/g, ' ').trim(); }
     if (!line) continue;
@@ -81,7 +82,7 @@ export function parseStatement(text, today = new Date()) {
       const n = toAmount(a);
       if (n !== null && Math.abs(n) >= 0.5 && Math.abs(n) < 200000) {
         seenAmount = true;
-        tokens.push({ t: 'amount', v: Math.abs(n) * (/-/.test(a) || /זיכוי|החזר/.test(line) ? -1 : 1), fx: /\$|€|£|USD|EUR|GBP|דולר|יורו/.test(line) });
+        tokens.push({ t: 'amount', v: Math.abs(n) * (/-/.test(a) || /זיכוי|החזר/.test(line) ? -1 : 1), fx: /\$|€|£|USD|EUR|GBP|דולר|יורו/.test(line), inc });
         seenContent = true;
       }
     }
@@ -93,7 +94,7 @@ export function parseStatement(text, today = new Date()) {
     if (k.t === 'cardctx') { if (cur.name && cur.amount !== undefined) close(); card = k.v; firstCard = firstCard || k.v; continue; }
     if (k.t === 'line') { if (cur.name && cur.amount !== undefined) close(); continue; }
     if (cur[k.t] !== undefined) close();
-    if (k.t === 'amount') { cur.amount = k.v; cur.fx = k.fx; } else cur[k.t] = k.v;
+    if (k.t === 'amount') { cur.amount = k.v; cur.fx = k.fx; cur.inc = k.inc; } else cur[k.t] = k.v;
   }
   close();
   return {
@@ -101,7 +102,7 @@ export function parseStatement(text, today = new Date()) {
     rows: rows.map(r => {
       if (r.date) lastDate = r.date;
       return { card: r.card || firstCard || null, date: r.date || lastDate || isoOf(today), time: r.time || null, merchant: r.name, place: placeOf(r.name), amount: r.amount,
-        installment: r.inst || null, foreign: !!r.fx, dateGuessed: !r.date && !lastDate };
+        installment: r.inst || null, foreign: !!r.fx, kind: r.inc ? 'income' : undefined, amount: r.inc ? Math.abs(r.amount) : r.amount, dateGuessed: !r.date && !lastDate };
     }),
   };
 }

@@ -36,7 +36,8 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund --ignore-scripts \
             tesseract.js@5.1.1 tesseract.js-core@5.1.1 \
-            @tesseract.js-data/heb@1.0.0 @tesseract.js-data/eng@1.0.0
+            @tesseract.js-data/heb@1.0.0 @tesseract.js-data/eng@1.0.0 \
+            pdfjs-dist@6.2.108
 
       - name: Assemble the site
         run: |
@@ -54,6 +55,11 @@ jobs:
           cp /tmp/ocr/node_modules/@tesseract.js-data/heb/4.0.0_best_int/heb.traineddata.gz $V/lang/
           cp /tmp/ocr/node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz $V/lang/
           cp /tmp/ocr/node_modules/tesseract.js/LICENSE.md $V/LICENSE-tesseract.js.md || true
+          P=_site/vendor/pdfjs && mkdir -p $P
+          cp /tmp/ocr/node_modules/pdfjs-dist/build/pdf.min.mjs /tmp/ocr/node_modules/pdfjs-dist/build/pdf.worker.min.mjs $P/
+          cp -r /tmp/ocr/node_modules/pdfjs-dist/cmaps /tmp/ocr/node_modules/pdfjs-dist/standard_fonts $P/
+          cp -r /tmp/ocr/node_modules/pdfjs-dist/wasm $P/ 2>/dev/null || true
+          cp /tmp/ocr/node_modules/pdfjs-dist/LICENSE $P/LICENSE-pdfjs || true
           echo "Files:" && find _site -type f | sort && du -sh _site
 
       - name: Check the screenshot reader on sample screenshots (real browser)

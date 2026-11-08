@@ -42,9 +42,9 @@ export function render(el) {
       ${ic('caret-left', 'go')}</button>
     <label class="option" for="file-in">
       <span class="opt-ic" style="--c:#5B8DEF">${ic('file-xls')}</span>
-      <span class="opt-t"><b>קובץ אקסל מישראכרט או מהבנק</b><small>הכי מדויק לחודש שלם. מורידים מהאתר ובוחרים כאן.</small></span>
+      <span class="opt-t"><b>קובץ מישראכרט או מהבנק</b><small>אקסל, CSV או PDF. הכי מדויק לחודש שלם: מורידים מהאתר או מהאפליקציה ובוחרים כאן.</small></span>
       ${ic('caret-left', 'go')}
-      <input id="file-in" type="file" accept=".xlsx,.xls,.csv,.html,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden>
+      <input id="file-in" type="file" accept=".xlsx,.xls,.csv,.html,.pdf,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden>
     </label>
     <button class="option" id="opt-paste" type="button">
       <span class="opt-ic" style="--c:#9C7FE3">${ic('copy')}</span>
@@ -216,6 +216,7 @@ function showSlipResult(el, r) {
 
 /* ---------------- files ---------------- */
 async function readFile(el, file) {
+  if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') return readPdfFile(el, file);
   const st = $('#add-status', el);
   st.innerHTML = `<div class="card status"><span class="spin"></span>קורא את ${esc(file.name)}…</div>`;
   try {
@@ -237,6 +238,27 @@ async function readFile(el, file) {
       : 'לא הצלחתי לקרוא את הקובץ. נסה לשמור אותו מחדש כ-xlsx או CSV.';
     st.innerHTML = `<div class="notice bad">${ic('warning')}<span>${esc(msg)}</span></div>`;
   }
+}
+
+/* ---------------- PDF ---------------- */
+async function readPdfFile(el, file) {
+  if (file.size > 25 * 1024 * 1024) { $('#add-status', el).innerHTML = `<div class="notice bad">${ic('warning')}<span>הקובץ גדול מדי. נסה PDF של חודש או שניים.</span></div>`; return; }
+  busy = { ctl: { stop: false } };
+  el.innerHTML = `<section class="card reading"><div class="read-ic">${ic('file-xls')}</div><h2>קורא את ה-PDF…</h2>
+    <p class="muted" id="rd-sub">זה קורה בתוך הטלפון. הקובץ לא נשלח לשום מקום.</p><div class="progress"><i id="rd-bar" style="width:3%"></i></div></section>`;
+  let r = null, err = null;
+  try {
+    const { readPdf } = await import('../pdf.js');
+    r = await readPdf(file, (msg, p) => { const s = $('#rd-sub', el); if (s && msg) s.textContent = msg; const b = $('#rd-bar', el); if (b && p != null) b.style.width = `${Math.max(3, p * 100).toFixed(0)}%`; });
+  } catch (e) { console.error('pdf', e && (e.stack || e.message || e)); err = e && e.name === 'PasswordException' ? 'הקובץ נעול בסיסמה. פתח אותו, שמור עותק בלי סיסמה ונסה שוב.' : 'לא הצלחתי לקרוא את ה-PDF. נסה קובץ אחר, או אקסל מאותו אתר.'; }
+  busy = null; file = null;
+  if (err) { mode = null; render(el); $('#add-status', el).innerHTML = `<div class="notice bad">${ic('warning')}<span>${esc(err)}</span></div>`; return; }
+  const res = parseStatement(r.text, new Date()); r.text = '';
+  if (!res.rows.length) { mode = null; render(el); $('#add-status', el).innerHTML = `<div class="notice bad">${ic('warning')}<span>לא מצאתי עסקאות ב-PDF. ודא שזה פירוט העסקאות או תנועות החשבון.</span></div>`; return; }
+  review0card = null;
+  buildReview([res.rows], r.bank ? 'bank' : 'pdf');
+  review.removed = res.removed; review.pdf = { pages: r.pages, scanned: r.scanned };
+  mode = 'review'; render(el);
 }
 
 /* ---------------- paste ---------------- */
@@ -303,6 +325,7 @@ function renderReview(el) {
         ${review.failed ? `<span class="chip">${review.failed} צילומים לא נקראו</span>` : ''}
       </div>
       ${review.cardFixes ? `<p class="hint">${ic('card')} ${review.cardFixes} עסקאות שכבר שמורות יקבלו את הכרטיס שמופיע בצילום.</p>` : ''}
+      ${review.pdf ? `<p class="hint">${ic('info')} נקראו ${review.pdf.pages} עמודים${review.pdf.scanned ? ` (${review.pdf.scanned} סרוקים - בדוק את הסכומים)` : ''}. הקובץ עצמו לא נשמר.</p>` : ''}
       ${review.source === 'screenshot' ? `<p class="hint">${ic('shield')} הצילומים כבר נמחקו מהזיכרון. בדוק שהשמות והסכומים נכונים - הקריאה מצילום לא תמיד מושלמת.</p>` : ''}
       ${fileBar}
       ${dups ? `<button class="link-btn left" id="rv-showdup" type="button">${review.showDup ? 'הסתר' : 'הצג'} את מה שסונן</button>` : ''}
