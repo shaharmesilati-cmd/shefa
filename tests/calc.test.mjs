@@ -122,4 +122,5 @@ assert.ok(MI.list.some(x => x.icon === 'trend-up'), 'increase vs last month');
 assert.equal(MI.stats.biggest.amount, 500); assert.equal(MI.stats.topCat.id, 'super');
 assert.deepEqual(needsCategory(S2, T2, '2026-11').map(t => t.merchant), ['BIT העברה']);
 assert.ok(isGenericMerchant('BIT העברה') && !isGenericMerchant('שופרסל'));
+assert.equal(parsePayslip('סה"כ תשלומים 16,200.00\n101 לתשלום 12,345.67').net, 12345.67, 'net found even when the word נטו is misread');
 console.log('v1.2 tests passed');

@@ -16,7 +16,7 @@ export function parseTsv(tsv) {
 
 const HEB = /[֐-׿]/, LAT2 = /[a-z]{2,}/i;
 /** A box that should be re-read as digits (amount, date, time). */
-export const needsDigits = w => !HEB.test(w.text) && !LAT2.test(w.text) && w.w > 8 && w.h > 8;
+export const needsDigits = w => /[\d₪]/.test(w.text) && !HEB.test(w.text) && !LAT2.test(w.text) && w.w > 8 && w.h > 8;
 
 /** Groups words into lines by their vertical centre and joins each line right-to-left. */
 export function buildLines(words) {

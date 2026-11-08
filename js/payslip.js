@@ -44,7 +44,8 @@ function findEmployer(lines) {
 export function parsePayslip(text, today = new Date()) {
   const { text: safe, removed } = redactSensitive(text);
   const lines = safe.split(/\n+/).map(l => l.replace(/[‎‏‪-‮⁦-⁩]/g, '').replace(/\s+/g, ' ').trim()).filter(Boolean);
-  const net = findAmount(lines, /נטו\s*לתשלום|לתשלום\s*נטו|נטו\s*בבנק/) ?? findAmount(lines, NET, /ברוטו/);
+  const net = findAmount(lines, /נטו\s*לתשלום|לתשלום\s*נטו|נטו\s*בבנק/) ?? findAmount(lines, NET, /ברוטו/)
+    ?? findAmount(lines, /לתשלום|לבנק|הועבר לחשבון/, /ברוטו|תשלומים|מס|ביטוח/);
   let gross = findAmount(lines, GROSS, NOT_GROSS);
   if (gross !== null && net !== null && gross < net) gross = null;
   return { net, gross, monthKey: findMonth(safe, today), employer: findEmployer(lines), removed };
