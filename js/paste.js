@@ -8,7 +8,8 @@ import { redactSensitive } from './sanitize.js';
 const SKIP = /סה"?כ|יתרה|מסגרת|לחיוב ב|החיוב הבא|חיוב הבא|ניצול|נקודות|הטבה|מבצע|כל העסקאות|עסקאות אחרונות|הצג עוד|הצג הכל|ישראכרט|isracard|דף הבית|פירוט|חיפוש|סינון|הגדרות|(?:^|\s)שלום(?:\s|,|!|$)|ערב טוב|בוקר טוב|צהריים טובים/i;
 const DATE_G = /(?<![\d₪.,])(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?(?![\d,])/g;
 const TIME = /(?<![\d.,])([01]?\d|2[0-3]):([0-5]\d)(?![\d.,])/;
-const SHEKEL = /-?₪\s?-?\d[\d,]*(?:\.\d{1,2})?|-?\d[\d,]*(?:\.\d{1,2})?\s?(?:₪|ש"ח|ש״ח)/;
+// "₪1,200.00" or "1,200.00 ₪" - but not "26 ₪1,200" (a date's year followed by a shekel price)
+const SHEKEL = /-?₪\s?-?\d[\d,]*(?:\.\d{1,2})?|(?<![\d\/.,])-?\d[\d,]*(?:\.\d{1,2})?\s?(?:₪|ש"ח|ש״ח)(?!\s?-?\d)/;
 const PLAIN = /-?\d{1,3}(?:,\d{3})+(?:\.\d{2})?(?!\d)|-?\d+\.\d{2}(?!\d)/;
 const INST = /תשלום\s*(\d+)\s*(?:מתוך|מ)\s*(\d+)/;
 // A real name has at least 2 Hebrew letters or one Latin word of 3+ letters (status-bar noise like "al" or "o is" does not)

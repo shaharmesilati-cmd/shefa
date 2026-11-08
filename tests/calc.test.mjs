@@ -174,3 +174,25 @@ console.log('v1.2 tests passed');
   }
   console.log('v2 tests passed');
 }
+
+// v2.6 - nothing that could open an account survives (bank PDFs, transfers, IBAN)
+{
+  const { parseStatement } = await import('../js/paste.js');
+  const { cleanField, redactSensitive } = await import('../js/sanitize.js');
+  const today = new Date(2026, 9, 20);
+  const BAD = /\d{5,}|\d{2,3}-\d{3}-\d{4,}|\d{4}[ -]\d{4}[ -]\d{4}/;
+  const samples = ['IBAN IL62 0108 0000 0009 9999 999', 'IL620108000000099999999', 'העברה ל 12-645-123456 15/10/26 500.00',
+    'העברה מ-10-800-12345678 01/10/26 ₪1,200.00', 'בנק 12 סניף 645 ח-ן 123456', "מס' לקוח 9876543 שופרסל 05/10/26 120.50",
+    'כרטיס 4580-1234-5678-9012 רמי לוי 03/10/26 89.90', 'ת.ז 012345678', '4580 1234 5678 9012 תוקף 12/28 cvv 123',
+    'שובר 77812345 פז 02/10/26 210.00', 'חיוב בנקאי מחשבון 123-456789 08/10/26 99.00', 'bit העברה 054-1234567 07/10/26 50.00'];
+  for (const s of samples) {
+    const rows = JSON.stringify(parseStatement(s, today).rows.map(r => [r.merchant, r.place, r.card]));
+    assert.ok(!BAD.test(redactSensitive(s).text.replace(/⟦C\d{4}⟧/g, '')), 'redacted: ' + s);
+    assert.ok(!BAD.test(cleanField(s)), 'field: ' + s);
+    assert.ok(!BAD.test(rows), 'rows: ' + s);
+  }
+  assert.equal(parseStatement('כרטיס 4580-1234-5678-9012 רמי לוי 03/10/26 89.90', today).rows[0].card, '9012', 'a dashed card keeps its last 4');
+  assert.equal(parseStatement('העברה 01/10/26 ₪1,200.00', today).rows[0].amount, 1200, '₪ before the number');
+  assert.ok(redactSensitive('פגישה 15-10-2026 ב-14:00').text.includes('15-10-2026'), 'a dashed date is not an account');
+  console.log('v2.6 privacy tests passed');
+}
