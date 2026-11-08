@@ -4,7 +4,7 @@ import { $, esc, ic, toast, openSheet, download, armConfirm, monthName } from '.
 import { budgetKeyOf } from '../calc.js';
 import { install, lockNow } from '../app.js';
 
-const VERSION = '1.2.1';
+const VERSION = '2.0.0';
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
@@ -14,16 +14,16 @@ export function render(el) {
   const S = state.settings;
   el.innerHTML = `
   <section class="card"><div class="card-h"><h2>${ic('device')} התקנה בטלפון</h2></div>
-    ${standalone() ? `<p class="ok-line">${ic('check')} כיס מותקנת כאפליקציה במכשיר הזה.</p>`
-      : install.prompt ? `<p>אפשר להתקין את כיס כאפליקציה על מסך הבית. היא תיפתח במסך מלא ותעבוד גם בלי אינטרנט.</p><button class="btn primary" id="inst" type="button">${ic('download')}התקנה</button>`
-      : isIOS() ? `<ol class="how"><li>ב-Safari, לחץ על כפתור השיתוף ${ic('share')} בתחתית.</li><li>בחר "הוסף למסך הבית".</li><li>לחץ "הוסף". מעכשיו כיס נפתחת כמו אפליקציה.</li></ol>`
-      : `<ol class="how"><li>בתפריט הדפדפן (שלוש הנקודות) בחר "התקנת אפליקציה" או "הוספה למסך הבית".</li><li>אשר. כיס תופיע על מסך הבית ותיפתח במסך מלא.</li></ol>`}</section>
+    ${standalone() ? `<p class="ok-line">${ic('check')} Stashwise מותקנת כאפליקציה במכשיר הזה.</p>`
+      : install.prompt ? `<p>אפשר להתקין את Stashwise כאפליקציה על מסך הבית. היא תיפתח במסך מלא ותעבוד גם בלי אינטרנט.</p><button class="btn primary" id="inst" type="button">${ic('download')}התקנה</button>`
+      : isIOS() ? `<ol class="how"><li>ב-Safari, לחץ על כפתור השיתוף ${ic('share')} בתחתית.</li><li>בחר "הוסף למסך הבית".</li><li>לחץ "הוסף". מעכשיו Stashwise נפתחת כמו אפליקציה.</li></ol>`
+      : `<ol class="how"><li>בתפריט הדפדפן (שלוש הנקודות) בחר "התקנת אפליקציה" או "הוספה למסך הבית".</li><li>אשר. Stashwise תופיע על מסך הבית ותיפתח במסך מלא.</li></ol>`}</section>
 
   <section class="card"><div class="card-h"><h2>${ic('shield')} פרטיות ואבטחה</h2></div>
     <ul class="facts">
       <li>${ic('lock-key')}<span>כל הנתונים מוצפנים (AES-256) ונשמרים רק במכשיר הזה. הקוד שלך הוא המפתח.</span></li>
       <li>${ic('x')}<span>אין חשבון, אין שרת ואין מעקב. האפליקציה חסומה טכנית מלשלוח מידע לאינטרנט.</span></li>
-      <li>${ic('bank')}<span>כיס לא מבקשת סיסמאות של הבנק או של האשראי, אף פעם. את הקבצים אתה מוריד בעצמך.</span></li>
+      <li>${ic('bank')}<span>Stashwise לא מבקשת סיסמאות של הבנק או של האשראי, אף פעם. את הקבצים אתה מוריד בעצמך.</span></li>
     </ul>
     <div class="row2">
       <div class="field"><label for="al">נעילה אוטומטית אחרי</label><select id="al">${[1, 5, 15, 30].map(m => `<option value="${m}" ${S.autoLockMin === m ? 'selected' : ''}>${m === 1 ? 'דקה' : m + ' דקות'} ללא שימוש</option>`).join('')}</select></div>
@@ -34,10 +34,10 @@ export function render(el) {
   <section class="card"><div class="card-h"><h2>${ic('download')} גיבוי והעברה למכשיר אחר</h2></div>
     <p class="hint">הגיבוי הוא קובץ מוצפן בסיסמה שתבחר. שמור אותו במקום בטוח (למשל בכונן שלך). כדי לעבור לטלפון אחר - שחזר בו את הקובץ.</p>
     <div class="btn-row"><button class="btn primary" id="bk" type="button">${ic('download')}יצירת גיבוי</button>
-      <label class="btn" for="rs">${ic('upload')}שחזור מגיבוי</label><input id="rs" type="file" accept=".kis,.shefa,application/json" hidden></div>
+      <label class="btn" for="rs">${ic('upload')}שחזור מגיבוי</label><input id="rs" type="file" accept=".stash,.kis,.shefa,application/json" hidden></div>
     <p class="muted small">${state.tx.length} תנועות שמורות כרגע.</p></section>
 
-  <section class="card"><div class="card-h"><h2>${ic('info')} על כיס</h2><span class="muted num">גרסה ${VERSION}</span></div>
+  <section class="card"><div class="card-h"><h2>${ic('info')} על Stashwise</h2><span class="muted num">גרסה ${VERSION}</span></div>
     <p class="hint">עדכונים לא נכנסים לבד: כשיש גרסה חדשה תופיע הודעה ותבחר אם לעדכן. כך אף אחד לא יכול להחליף לך את האפליקציה בלי שתדע.</p>
     <div class="btn-row"><button class="btn" id="upd" type="button">${ic('refresh')}בדיקת עדכונים</button></div></section>
 
@@ -92,7 +92,7 @@ function backup() {
       if (a !== b) return toast('הסיסמאות לא זהות');
       const btn = $('#bk-go', sh); btn.disabled = true; btn.innerHTML = `<span class="spin"></span>מצפין…`;
       const text = await vault.exportBackup({ v: 1, settings: state.settings, tx: state.tx, at: new Date().toISOString() }, a);
-      download(`kis-backup-${new Date().toISOString().slice(0, 10)}.kis`, text);
+      download(`stashwise-backup-${new Date().toISOString().slice(0, 10)}.stash`, text);
       close(); toast('קובץ הגיבוי ירד. שמור אותו במקום בטוח.');
     };
   });
@@ -110,7 +110,7 @@ function restore(file) {
         replaceAll(d); await flushNow(); close(); changed(); toast(`שוחזרו ${state.tx.length} תנועות`);
       } catch (e) {
         btn.disabled = false; btn.innerHTML = `${ic('upload')}שחזור`;
-        toast(e && e.code === 'wrong' ? 'הסיסמה שגויה' : 'זה לא קובץ גיבוי של כיס');
+        toast(e && e.code === 'wrong' ? 'הסיסמה שגויה' : 'זה לא קובץ גיבוי של Stashwise');
       }
     };
   });

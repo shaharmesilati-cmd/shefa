@@ -1,5 +1,5 @@
 // Offline support + "share to Shefa". A new version waits until the user taps "עדכון".
-const VERSION = 'shefa-1.2.1';
+const VERSION = 'shefa-2.0.0';
 const RUNTIME = 'shefa-engine'; // OCR engine files, cached on first use
 const INBOX = 'shefa-inbox';    // shared screenshots, deleted as soon as the app reads them
 const FILES = [

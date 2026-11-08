@@ -130,3 +130,12 @@ assert.deepEqual(iz.rows.map(r => [r.merchant, r.date, r.amount, r.card]), [
 assert.equal(guessCategory('טעינות "חבר" טעמים'), 'other'); assert.equal(guessCategory('טעינות - חבר של קבע'), 'other');
 assert.equal(guessCategory('בר יין תל אביב'), 'fun'); assert.equal(guessCategory('מי אביבים'), 'home');
 console.log('v1.2 tests passed');
+// ---- v2: streak ----
+{
+  const { budgetStreak } = await import('../js/insights.js');
+  const S3 = { income: 3000, startDay: 1, savings: { mode: 'fixed', value: 0 }, fixed: [], goals: [], categories: [{ id: 'other', budget: 0 }] }; // 100/day in Nov
+  const T3 = [{ date: '2026-11-03', merchant: 'a', amount: 250, kind: 'expense' }, { date: '2026-11-05', merchant: 'b', amount: 80, kind: 'expense' }, { date: '2026-11-07', merchant: 'c', amount: 99, kind: 'expense' }];
+  assert.equal(budgetStreak(S3, T3, new Date(2026, 10, 8)), 4, 'Nov 4-7 within 100/day, Nov 3 was over');
+  assert.equal(budgetStreak(S3, [], new Date(2026, 10, 8)), 0);
+  console.log('v2 tests passed');
+}

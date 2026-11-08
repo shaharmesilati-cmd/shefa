@@ -76,3 +76,32 @@ export function needsCategory(settings, tx, key) {
 
 // Payment apps: the name says nothing about what was bought, so a choice applies only to that one purchase.
 export const isGenericMerchant = m => /bit|ביט|paybox|פייבוקס|paypal|פייפאל|apple ?pay|google ?pay|העברה|העברת|pepper ?pay/i.test(String(m || ''));
+
+/**
+ * Days in a row (ending yesterday) where spending stayed within the daily allowance of that month.
+ * Counting starts only from the first day the user has any purchase, so an empty app has no streak.
+ */
+export function budgetStreak(settings, tx, today = new Date()) {
+  const exp = tx.filter(t => t.kind === 'expense' && !t.ignored && !t.fixedId && t.date);
+  if (!exp.length) return 0;
+  const first = exp.reduce((m, t) => (t.date < m ? t.date : m), exp[0].date);
+  const byDay = {};
+  for (const t of exp) byDay[t.date] = (byDay[t.date] || 0) + t.amount;
+  const cache = {};
+  const allowance = iso => {
+    const k = budgetKeyOfLocal(iso, settings.startDay || 1);
+    if (!(k in cache)) { const C = monthSummary(settings, tx, k, today); cache[k] = C.total ? Math.max(0, C.available) / C.total : 0; }
+    return cache[k];
+  };
+  let n = 0;
+  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  for (let i = 0; i < 366; i++, d.setDate(d.getDate() - 1)) {
+    const iso = isoOf(d);
+    if (iso < first) break;
+    const a = allowance(iso);
+    if (a <= 0 || (byDay[iso] || 0) > a) break;
+    n++;
+  }
+  return n;
+}
+function budgetKeyOfLocal(iso, sd) { const [y, m, dd] = iso.split('-').map(Number); const t = dd >= sd ? new Date(y, m - 1, 1) : new Date(y, m - 2, 1); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`; }

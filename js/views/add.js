@@ -32,7 +32,7 @@ export function render(el) {
     <section class="card intro"><h2>הוספת הוצאות</h2><p class="muted">הכל נקרא כאן, על המכשיר. לפני שמירה רואים הכל, ומה שכבר נשמר מסונן לבד.</p></section>
     <label class="option drop" id="shots-drop" for="shots-in">
       <span class="opt-ic" style="--c:#14967C">${ic('images')}</span>
-      <span class="opt-t"><b>צילומי מסך מהאשראי</b><small>בוחרים צילום אחד או כמה מאפליקציית ישראכרט. כיס קוראת תאריך, שעה, בית עסק, מקום וסכום.</small></span>
+      <span class="opt-t"><b>צילומי מסך מהאשראי</b><small>בוחרים צילום אחד או כמה מאפליקציית ישראכרט. Stashwise קוראת תאריך, שעה, בית עסק, מקום וסכום.</small></span>
       <span class="badge">הכי קל</span>
       <input id="shots-in" type="file" accept="image/*" multiple hidden>
     </label>
@@ -55,12 +55,11 @@ export function render(el) {
       <span class="opt-t"><b>הוספה ידנית</b><small>מזומן, הכנסה, או כל דבר אחר.</small></span>
       ${ic('caret-left', 'go')}</button>
     <div id="add-status"></div>
-    <section class="card privacy">${ic('shield')}<div><b>מה קורה לצילומים?</b>
-      <p>הצילום נקרא בתוך הטלפון ולא נשלח לשום מקום. מספרי כרטיס, תוקף, קוד אבטחה, ת"ז ומספרי אישור נמחקים מהטקסט לפני הקריאה, והתמונה עצמה נמחקת מהזיכרון ברגע שהקריאה מסתיימת. נשמרים רק תאריך, שעה, בית עסק, מקום וסכום.</p></div></section>
+    <p class="hint center">${ic('shield')} הכל נקרא בתוך הטלפון. מספרי כרטיס (מלבד 4 אחרונות), ת"ז ומספרי אישור נמחקים, והתמונה לא נשמרת.</p>
     <details class="card help"><summary>${ic('question')} טיפים לצילום טוב</summary>
       <ul class="how"><li>צלם את מסך רשימת העסקאות, כשהשמות והסכומים נראים בבירור.</li>
       <li>אפשר לגלול ולצלם כמה צילומים ברצף ולבחור את כולם יחד. עסקאות שמופיעות בשני צילומים יסומנו ככפילות.</li>
-      <li>באנדרואיד אפשר גם לשתף צילום ישירות מהגלריה לכיס (אחרי שמתקינים אותה).</li>
+      <li>באנדרואיד אפשר גם לשתף צילום ישירות מהגלריה ל-Stashwise (אחרי שמתקינים אותה).</li>
       <li>לחודש שלם, קובץ האקסל מאתר ישראכרט מדויק יותר.</li></ul></details>`;
   const si = $('#shots-in', el);
   si.onchange = () => { const files = [...si.files]; si.value = ''; if (files.length) readShots(files); };
@@ -145,7 +144,7 @@ export async function readShots(files) {
 function renderPayslip(el, err) {
   el.innerHTML = `<section class="card">
       <div class="card-h"><h2>${ic('hand-coins')} תלוש משכורת</h2><button class="btn small ghost" id="back" type="button">${ic('caret-right')}חזרה</button></div>
-      <p class="muted">צלם את התלוש (או בחר צילום/סריקה שלו). כיס מוצאת את השכר נטו, הברוטו, החודש והמעסיק.</p>
+      <p class="muted">צלם את התלוש (או בחר צילום/סריקה שלו). Stashwise מוצאת את השכר נטו, הברוטו, החודש והמעסיק.</p>
       <label class="option drop slip" for="slip-in">
         <span class="opt-ic" style="--c:#F6B829">${ic('scan')}</span>
         <span class="opt-t"><b>בחירת צילום של התלוש</b><small>קורא על המכשיר. ת"ז, מספר חשבון, כתובת ונתוני מס נמחקים ולא נשמרים.</small></span>

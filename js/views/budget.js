@@ -77,9 +77,9 @@ export function render(el) {
       <div class="icon-pick" role="radiogroup" aria-label="סמל">${CAT_ICONS.map((n, i) => `<button type="button" role="radio" aria-checked="${i === CAT_ICONS.length - 1}" data-ico="${n}" class="${i === CAT_ICONS.length - 1 ? 'on' : ''}" aria-label="${n}">${ic(n)}</button>`).join('')}</div>
       <button class="btn small primary" id="nc-add" type="button">${ic('plus')}הוספה</button></details></section>
 
-  <section class="card explain"><h2>איך מחושב "נשאר להוציא"?</h2>
+  <details class="card explain"><summary><h2>${ic('question')} איך מחושב "אפשר להוציא היום"?</h2></summary>
     <p>הכנסה, פחות הוצאות קבועות, פחות חיסכון = <b>הפנוי להוצאות</b>. ממנו מורידים כל הוצאה משתנה שנרשמה בחודש. הוצאה שמזוהה כקבועה לא נספרת פעמיים, ותשלום חשבון האשראי מהבנק לא נספר בכלל (העסקאות עצמן כבר נספרו).</p>
-    <p>"להיום" = מה שנשאר חלקי הימים שנותרו. "לשבוע" = שבעה ימים כאלה.</p></section>`;
+    <p>"אפשר להוציא היום" = מה שנשאר לחודש חלקי הימים שנותרו. אם היום הוצאת פחות, מחר הסכום יגדל.</p></details>`;
   wire(el);
 }
 

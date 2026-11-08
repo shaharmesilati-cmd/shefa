@@ -20,7 +20,7 @@ function lockScreen(mode) {
   const setup = mode === 'setup';
   el.innerHTML = `<div class="lock-card">
     <div class="lock-logo">${ic('wallet', 'big')}</div>
-    <h1>כיס</h1>
+    <h1>Stashwise</h1>
     <p class="lock-sub">${setup ? 'התקציב החודשי שלך, נעול ומוצפן על המכשיר הזה בלבד.' : 'הזן את הקוד כדי לפתוח'}</p>
     <form id="lock-form" class="lock-form" autocomplete="off" novalidate>
       ${setup ? `<div class="field"><label for="lk-name">איך לקרוא לך? (לא חובה)</label><input id="lk-name" type="text" maxlength="30" autocomplete="given-name"></div>` : ''}
@@ -198,6 +198,6 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     lockScreen((await vault.exists()) ? 'unlock' : 'setup');
   } catch {
     $('#lock').hidden = false;
-    $('#lock').innerHTML = `<div class="lock-card"><h1>כיס</h1><p>הדפדפן הזה לא תומך בהצפנה ובשמירה מקומית (אולי זו גלישה פרטית). פתח את האתר בדפדפן רגיל - Chrome או Safari.</p></div>`;
+    $('#lock').innerHTML = `<div class="lock-card"><h1>Stashwise</h1><p>הדפדפן הזה לא תומך בהצפנה ובשמירה מקומית (אולי זו גלישה פרטית). פתח את האתר בדפדפן רגיל - Chrome או Safari.</p></div>`;
   }
 })();
