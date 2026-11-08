@@ -3,7 +3,8 @@ import * as vault from './vault.js';
 import { budgetKeyOf, isoOf } from './calc.js';
 import { uid, num, toast } from './util.js';
 
-export const CAT_COLORS = ['#21A38A', '#F2865E', '#5B8DEF', '#E9B23C', '#9C7FE3', '#E35D7A', '#4CAF7D', '#2AA7C9', '#D46FB5', '#A98467', '#7D8C99', '#F0A04B'];
+export const CAT_COLORS = ['#22B573', '#FF8A4C', '#3D7BFA', '#F6B829', '#8B6CF6', '#F2559A', '#14B8C9', '#F15B5B', '#5B6CFF', '#E5A00D', '#7E8AA3', '#84C341'];
+const OLD_COLORS = ['#21A38A', '#F2865E', '#5B8DEF', '#E9B23C', '#9C7FE3', '#E35D7A', '#4CAF7D', '#2AA7C9', '#D46FB5', '#A98467', '#7D8C99', '#F0A04B'];
 export const CAT_ICONS = ['shopping-cart', 'fork-knife', 'car', 't-shirt', 'house-line', 'first-aid', 'popcorn', 'wifi', 'gift', 'dots-circle', 'coffee', 'airplane', 'baby', 'barbell', 'paw', 'book', 'lightning', 'graduation', 'gas', 'bus', 'heart', 'pill', 'scissors', 'game', 'tag'];
 const DEFAULT_CATS = [
   ['super', 'סופר ומכולת', 'shopping-cart', 30], ['food', 'אוכל בחוץ וקפה', 'fork-knife', 10], ['transport', 'רכב ותחבורה', 'car', 14],
@@ -29,9 +30,9 @@ export function normalizeSettings(d) {
   if (Array.isArray(d.fixed)) s.fixed = d.fixed.map(f => ({ id: str(f.id) || uid(), name: str(f.name), amount: num(f.amount), keyword: str(f.keyword, 40) }));
   if (Array.isArray(d.categories) && d.categories.length) s.categories = d.categories.map((c, i) => ({
     id: str(c.id) || uid(), name: str(c.name, 40), icon: CAT_ICONS.includes(c.icon) ? c.icon : 'tag',
-    budget: num(c.budget), weight: num(c.weight), color: /^#[0-9a-f]{6}$/i.test(c.color) ? c.color : CAT_COLORS[i % CAT_COLORS.length],
+    budget: num(c.budget), weight: num(c.weight), color: OLD_COLORS.includes(String(c.color).toUpperCase()) ? CAT_COLORS[OLD_COLORS.indexOf(String(c.color).toUpperCase())] : /^#[0-9a-f]{6}$/i.test(c.color) ? c.color : CAT_COLORS[i % CAT_COLORS.length],
   }));
-  if (!s.categories.some(c => c.id === 'other')) s.categories.push({ id: 'other', name: 'שונות', icon: 'dots-circle', budget: 0, weight: 0, color: '#7D8C99' });
+  if (!s.categories.some(c => c.id === 'other')) s.categories.push({ id: 'other', name: 'שונות', icon: 'dots-circle', budget: 0, weight: 0, color: '#7E8AA3' });
   if (d.rules && typeof d.rules === 'object') for (const [k, v] of Object.entries(d.rules)) s.rules[str(k, 80)] = str(v, 40);
   return s;
 }
@@ -42,7 +43,7 @@ export function normalizeTx(t) {
     merchant: str(t.merchant) || 'ללא שם', amount: Math.round(num(t.amount) * 100) / 100,
     category: str(t.category, 40) || 'other', kind: ['expense', 'income', 'card-payment'].includes(t.kind) ? t.kind : 'expense',
     fixedId: t.fixedId ? str(t.fixedId) : null, installment: t.installment ? str(t.installment, 12) : null, foreign: !!t.foreign,
-    note: str(t.note, 120), source: str(t.source, 12) || 'manual', added: Number(t.added) || Date.now(), ignored: !!t.ignored,
+    note: str(t.note, 120), source: str(t.source, 12) || 'manual', confirmed: !!t.confirmed, added: Number(t.added) || Date.now(), ignored: !!t.ignored,
   };
 }
 

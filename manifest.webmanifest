@@ -1,6 +1,6 @@
 {
-  "name": "שפע - תקציב חודשי",
-  "short_name": "שפע",
+  "name": "כיס - התקציב החודשי שלי",
+  "short_name": "כיס",
   "description": "ניהול תקציב חודשי פרטי ומוצפן: כמה נשאר להוציא, חיסכון, הוצאות קבועות ותקציב לקטגוריות.",
   "lang": "he",
   "dir": "rtl",
@@ -9,8 +9,8 @@
   "id": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#F3F7F5",
-  "theme_color": "#14967C",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF",
   "categories": ["finance", "productivity"],
   "share_target": {
     "action": "./share-target",

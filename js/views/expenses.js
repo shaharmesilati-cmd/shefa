@@ -10,7 +10,7 @@ export function render(el) {
   el.innerHTML = `<section class="card">
       <div class="card-h"><h2>תנועות החודש</h2><span id="ex-total" class="muted"></span></div>
       <div class="row2">
-        <div class="field"><label for="ex-q">חיפוש</label><div class="search">${ic('search')}<input id="ex-q" type="search" placeholder="שם בית עסק" value="${esc(f.q)}"></div></div>
+        <div class="field"><label for="ex-q">חיפוש</label><div class="search">${ic('search')}<input id="ex-q" type="search" placeholder="שם, קטגוריה או סכום" value="${esc(f.q)}"></div></div>
         <div class="field"><label for="ex-cat">הצג</label><select id="ex-cat"></select></div>
       </div></section>
     <section class="card" id="ex-list"></section>
@@ -33,7 +33,11 @@ function list(el) {
   const C = monthSummary(state.settings, state.tx, state.ui.curKey);
   let tx = C.inPeriod.slice().sort((a, b) => b.date.localeCompare(a.date) || b.added - a.added);
   const q = normMerchant(f.q);
-  if (q) tx = tx.filter(t => normMerchant(t.merchant).includes(q));
+  if (q) {
+    const qa = parseFloat(f.q.replace(/[,₪\s]/g, ''));
+    tx = tx.filter(t => normMerchant(t.merchant).includes(q) || normMerchant(catById(t.category).name).includes(q) || (t.place && normMerchant(t.place).includes(q))
+      || (isFinite(qa) && String(t.amount).startsWith(String(qa))));
+  }
   const exp = t => t.kind === 'expense' && !t.ignored;
   if (f.cat === '__var') tx = tx.filter(t => exp(t) && !t.fixedId);
   else if (f.cat === '__fixed') tx = tx.filter(t => exp(t) && t.fixedId);

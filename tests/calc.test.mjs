@@ -97,3 +97,29 @@ const saved = [{ date: '2026-11-01', merchant: 'WOLT וולט', amount: 60 }];
 const all = markDuplicates([g1, g2], saved);
 assert.deepEqual(all.map(r => r.dup), [null, null, null, 'batch', 'saved'], 'two coffees kept, overlap and saved removed');
 console.log('v1.1 tests passed');
+
+// ---- v1.2: salary slip, insights, inbox ----
+const { parsePayslip } = await import('../js/payslip.js');
+const ps = parsePayslip('טכנו-סופט בע"מ\nתלוש שכר לחודש 10/2026\nת.ז. 012345678 בנק 12 סניף 345 חשבון 1234567\nשכר יסוד 15,000.00\nסה"כ תשלומים 16,200.00\nברוטו למס 16,200.00\nנטו לתשלום 12,345.67', new Date(2026, 10, 8));
+assert.deepEqual([ps.net, ps.gross, ps.monthKey, ps.employer], [12345.67, 16200, '2026-10', 'טכנו-סופט בע"מ']);
+assert.ok(ps.removed >= 2);
+const ps2 = parsePayslip('משכורת אוקטובר 2026\nשכר נטו\n9,870', new Date(2026, 10, 8));
+assert.deepEqual([ps2.net, ps2.monthKey], [9870, '2026-10']);
+const { monthInsights, needsCategory, isGenericMerchant } = await import('../js/insights.js');
+const S2 = { income: 10000, startDay: 1, savings: { mode: 'fixed', value: 0 }, fixed: [], goals: [{ name: 'חופשה', target: 5000, saved: 0, monthly: 300 }],
+  categories: [{ id: 'food', name: 'אוכל בחוץ', budget: 300 }, { id: 'super', name: 'סופר', budget: 2000 }, { id: 'other', name: 'שונות', budget: 0 }] };
+const T2 = [
+  { date: '2026-10-03', merchant: 'שופרסל', amount: 900, kind: 'expense', category: 'super' },
+  { date: '2026-10-05', merchant: 'וולט', amount: 100, kind: 'expense', category: 'food' },
+  { date: '2026-11-02', merchant: 'שופרסל', amount: 500, kind: 'expense', category: 'super' },
+  { date: '2026-11-03', merchant: 'וולט', amount: 420, kind: 'expense', category: 'food' },
+  { date: '2026-11-04', merchant: 'BIT העברה', amount: 50, kind: 'expense', category: 'other' },
+  { date: '2026-11-04', merchant: 'מוכר', amount: 70, kind: 'expense', category: 'other', confirmed: true },
+];
+const MI = monthInsights(S2, T2, '2026-11', new Date(2026, 10, 8));
+assert.ok(MI.list.some(x => x.tone === 'alert' && x.text.includes('אוכל בחוץ')), 'over budget alert');
+assert.ok(MI.list.some(x => x.icon === 'trend-up'), 'increase vs last month');
+assert.equal(MI.stats.biggest.amount, 500); assert.equal(MI.stats.topCat.id, 'super');
+assert.deepEqual(needsCategory(S2, T2, '2026-11').map(t => t.merchant), ['BIT העברה']);
+assert.ok(isGenericMerchant('BIT העברה') && !isGenericMerchant('שופרסל'));
+console.log('v1.2 tests passed');

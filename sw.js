@@ -1,11 +1,11 @@
 // Offline support + "share to Shefa". A new version waits until the user taps "עדכון".
-const VERSION = 'shefa-1.1.0';
+const VERSION = 'shefa-1.2.0';
 const RUNTIME = 'shefa-engine'; // OCR engine files, cached on first use
 const INBOX = 'shefa-inbox';    // shared screenshots, deleted as soon as the app reads them
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'assets/icons.svg',
   'js/app.js', 'js/vault.js', 'js/store.js', 'js/calc.js', 'js/util.js', 'js/categorize.js', 'js/importers.js', 'js/xlsx.js',
-  'js/paste.js', 'js/sanitize.js', 'js/dedupe.js', 'js/ocr.js', 'js/ocrlayout.js',
+  'js/paste.js', 'js/sanitize.js', 'js/dedupe.js', 'js/ocr.js', 'js/ocrlayout.js', 'js/payslip.js', 'js/insights.js',
   'js/views/parts.js', 'js/views/home.js', 'js/views/expenses.js', 'js/views/add.js', 'js/views/budget.js', 'js/views/more.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png',
 ];

@@ -1,9 +1,10 @@
 import * as vault from '../vault.js';
 import { state, persist, replaceAll, flushNow, changed } from '../store.js';
-import { $, esc, ic, toast, openSheet, download } from '../util.js';
+import { $, esc, ic, toast, openSheet, download, armConfirm, monthName } from '../util.js';
+import { budgetKeyOf } from '../calc.js';
 import { install, lockNow } from '../app.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
@@ -13,16 +14,16 @@ export function render(el) {
   const S = state.settings;
   el.innerHTML = `
   <section class="card"><div class="card-h"><h2>${ic('device')} התקנה בטלפון</h2></div>
-    ${standalone() ? `<p class="ok-line">${ic('check')} שפע מותקנת כאפליקציה במכשיר הזה.</p>`
-      : install.prompt ? `<p>אפשר להתקין את שפע כאפליקציה על מסך הבית. היא תיפתח במסך מלא ותעבוד גם בלי אינטרנט.</p><button class="btn primary" id="inst" type="button">${ic('download')}התקנה</button>`
-      : isIOS() ? `<ol class="how"><li>ב-Safari, לחץ על כפתור השיתוף ${ic('share')} בתחתית.</li><li>בחר "הוסף למסך הבית".</li><li>לחץ "הוסף". מעכשיו שפע נפתחת כמו אפליקציה.</li></ol>`
-      : `<ol class="how"><li>בתפריט הדפדפן (שלוש הנקודות) בחר "התקנת אפליקציה" או "הוספה למסך הבית".</li><li>אשר. שפע תופיע על מסך הבית ותיפתח במסך מלא.</li></ol>`}</section>
+    ${standalone() ? `<p class="ok-line">${ic('check')} כיס מותקנת כאפליקציה במכשיר הזה.</p>`
+      : install.prompt ? `<p>אפשר להתקין את כיס כאפליקציה על מסך הבית. היא תיפתח במסך מלא ותעבוד גם בלי אינטרנט.</p><button class="btn primary" id="inst" type="button">${ic('download')}התקנה</button>`
+      : isIOS() ? `<ol class="how"><li>ב-Safari, לחץ על כפתור השיתוף ${ic('share')} בתחתית.</li><li>בחר "הוסף למסך הבית".</li><li>לחץ "הוסף". מעכשיו כיס נפתחת כמו אפליקציה.</li></ol>`
+      : `<ol class="how"><li>בתפריט הדפדפן (שלוש הנקודות) בחר "התקנת אפליקציה" או "הוספה למסך הבית".</li><li>אשר. כיס תופיע על מסך הבית ותיפתח במסך מלא.</li></ol>`}</section>
 
   <section class="card"><div class="card-h"><h2>${ic('shield')} פרטיות ואבטחה</h2></div>
     <ul class="facts">
       <li>${ic('lock-key')}<span>כל הנתונים מוצפנים (AES-256) ונשמרים רק במכשיר הזה. הקוד שלך הוא המפתח.</span></li>
       <li>${ic('x')}<span>אין חשבון, אין שרת ואין מעקב. האפליקציה חסומה טכנית מלשלוח מידע לאינטרנט.</span></li>
-      <li>${ic('bank')}<span>שפע לא מבקשת סיסמאות של הבנק או של האשראי, אף פעם. את הקבצים אתה מוריד בעצמך.</span></li>
+      <li>${ic('bank')}<span>כיס לא מבקשת סיסמאות של הבנק או של האשראי, אף פעם. את הקבצים אתה מוריד בעצמך.</span></li>
     </ul>
     <div class="row2">
       <div class="field"><label for="al">נעילה אוטומטית אחרי</label><select id="al">${[1, 5, 15, 30].map(m => `<option value="${m}" ${S.autoLockMin === m ? 'selected' : ''}>${m === 1 ? 'דקה' : m + ' דקות'} ללא שימוש</option>`).join('')}</select></div>
@@ -33,12 +34,16 @@ export function render(el) {
   <section class="card"><div class="card-h"><h2>${ic('download')} גיבוי והעברה למכשיר אחר</h2></div>
     <p class="hint">הגיבוי הוא קובץ מוצפן בסיסמה שתבחר. שמור אותו במקום בטוח (למשל בכונן שלך). כדי לעבור לטלפון אחר - שחזר בו את הקובץ.</p>
     <div class="btn-row"><button class="btn primary" id="bk" type="button">${ic('download')}יצירת גיבוי</button>
-      <label class="btn" for="rs">${ic('upload')}שחזור מגיבוי</label><input id="rs" type="file" accept=".shefa,application/json" hidden></div>
+      <label class="btn" for="rs">${ic('upload')}שחזור מגיבוי</label><input id="rs" type="file" accept=".kis,.shefa,application/json" hidden></div>
     <p class="muted small">${state.tx.length} תנועות שמורות כרגע.</p></section>
 
-  <section class="card"><div class="card-h"><h2>${ic('info')} על שפע</h2><span class="muted num">גרסה ${VERSION}</span></div>
+  <section class="card"><div class="card-h"><h2>${ic('info')} על כיס</h2><span class="muted num">גרסה ${VERSION}</span></div>
     <p class="hint">עדכונים לא נכנסים לבד: כשיש גרסה חדשה תופיע הודעה ותבחר אם לעדכן. כך אף אחד לא יכול להחליף לך את האפליקציה בלי שתדע.</p>
     <div class="btn-row"><button class="btn" id="upd" type="button">${ic('refresh')}בדיקת עדכונים</button></div></section>
+
+  <section class="card"><div class="card-h"><h2>${ic('calendar')} ניקוי חודש</h2></div>
+    <p class="hint">מוחק רק את התנועות של ${monthName(state.ui.curKey)} (ההגדרות והתקציב נשארים). שימושי אם העלית קובץ לא נכון.</p>
+    <button class="btn danger" id="wipe-month" type="button">${ic('trash')}מחיקת התנועות של ${monthName(state.ui.curKey)}</button></section>
 
   <section class="card danger-zone"><div class="card-h"><h2>${ic('warning')} מחיקת כל הנתונים</h2></div>
     <p class="hint">מוחק את הכספת מהמכשיר הזה. אי אפשר לבטל. כדאי לגבות קודם.</p>
@@ -54,6 +59,11 @@ export function render(el) {
   $('#bk', el).onclick = backup;
   $('#rs', el).onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) restore(f); };
   $('#wipe', el).onclick = wipe;
+  armConfirm($('#wipe-month', el), () => {
+    const sd = state.settings.startDay, k = state.ui.curKey, before = state.tx.length;
+    state.tx = state.tx.filter(t => budgetKeyOf(t.date, sd) !== k); persist(true); changed();
+    toast(`נמחקו ${before - state.tx.length} תנועות`); render(el);
+  }, 'לחץ שוב כדי למחוק');
 }
 
 function passFields(prefix, labels) {
@@ -82,7 +92,7 @@ function backup() {
       if (a !== b) return toast('הסיסמאות לא זהות');
       const btn = $('#bk-go', sh); btn.disabled = true; btn.innerHTML = `<span class="spin"></span>מצפין…`;
       const text = await vault.exportBackup({ v: 1, settings: state.settings, tx: state.tx, at: new Date().toISOString() }, a);
-      download(`shefa-backup-${new Date().toISOString().slice(0, 10)}.shefa`, text);
+      download(`kis-backup-${new Date().toISOString().slice(0, 10)}.kis`, text);
       close(); toast('קובץ הגיבוי ירד. שמור אותו במקום בטוח.');
     };
   });
@@ -100,7 +110,7 @@ function restore(file) {
         replaceAll(d); await flushNow(); close(); changed(); toast(`שוחזרו ${state.tx.length} תנועות`);
       } catch (e) {
         btn.disabled = false; btn.innerHTML = `${ic('upload')}שחזור`;
-        toast(e && e.code === 'wrong' ? 'הסיסמה שגויה' : 'זה לא קובץ גיבוי של שפע');
+        toast(e && e.code === 'wrong' ? 'הסיסמה שגויה' : 'זה לא קובץ גיבוי של כיס');
       }
     };
   });

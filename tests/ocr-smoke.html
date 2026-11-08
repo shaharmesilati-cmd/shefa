@@ -3,6 +3,7 @@
 // Runs the real on-device reader on two fake card-app screenshots (the card number in them is made up).
 import { readImage, stopOcr } from './js/ocr.js';
 import { parseStatement } from './js/paste.js';
+import { parsePayslip } from './js/payslip.js';
 const out = {};
 try {
   for (const n of ['light', 'dark']) {
@@ -10,6 +11,8 @@ try {
     const text = await readImage(blob);
     out[n] = parseStatement(text, new Date(2026, 10, 8, 20));
   }
+  const slip = await (await fetch('fixtures/sample-payslip.png')).blob();
+  out.payslip = parsePayslip(await readImage(slip), new Date(2026, 10, 8));
   await stopOcr();
 } catch (e) { out.error = String(e && e.message || e); }
 window.__done = out;

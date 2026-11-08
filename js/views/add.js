@@ -5,6 +5,8 @@ import { readWorkbook, extractRows, rowsToTx } from '../importers.js';
 import { parseStatement, placeOf } from '../paste.js';
 import { readImage, stopOcr } from '../ocr.js';
 import { markDuplicates } from '../dedupe.js';
+import { parsePayslip } from '../payslip.js';
+import { isoOf } from '../calc.js';
 import { cleanField, cardOf } from '../sanitize.js';
 import { guessCategory, looksLikeCardPayment, matchFixed } from '../categorize.js';
 import { catOptions, kindOptions, openTxSheet } from './parts.js';
@@ -22,16 +24,22 @@ const IMG_TYPES = /^image\/(png|jpe?g|webp|gif|heic|heif|bmp)$/i;
 export function render(el) {
   host = el;
   if (busy) return; // progress UI is drawn by readShots
+  if (state.ui.addMode === 'payslip') { state.ui.addMode = null; mode = 'payslip'; }
   if (mode === 'review' && review) return renderReview(el);
   if (mode === 'paste') return renderPaste(el);
+  if (mode === 'payslip') return renderPayslip(el);
   el.innerHTML = `
     <section class="card intro"><h2>הוספת הוצאות</h2><p class="muted">הכל נקרא כאן, על המכשיר. לפני שמירה רואים הכל, ומה שכבר נשמר מסונן לבד.</p></section>
     <label class="option drop" id="shots-drop" for="shots-in">
       <span class="opt-ic" style="--c:#14967C">${ic('images')}</span>
-      <span class="opt-t"><b>צילומי מסך מהאשראי</b><small>בוחרים צילום אחד או כמה מאפליקציית ישראכרט. שפע קוראת תאריך, שעה, בית עסק, מקום וסכום.</small></span>
+      <span class="opt-t"><b>צילומי מסך מהאשראי</b><small>בוחרים צילום אחד או כמה מאפליקציית ישראכרט. כיס קוראת תאריך, שעה, בית עסק, מקום וסכום.</small></span>
       <span class="badge">הכי קל</span>
       <input id="shots-in" type="file" accept="image/*" multiple hidden>
     </label>
+    <button class="option" id="opt-slip" type="button">
+      <span class="opt-ic" style="--c:#F6B829">${ic('hand-coins')}</span>
+      <span class="opt-t"><b>תלוש משכורת</b><small>פעם בחודש: צילום של התלוש, והמשכורת נרשמת כהכנסה של החודש.</small></span>
+      ${ic('caret-left', 'go')}</button>
     <label class="option" for="file-in">
       <span class="opt-ic" style="--c:#5B8DEF">${ic('file-xls')}</span>
       <span class="opt-t"><b>קובץ אקסל מישראכרט או מהבנק</b><small>הכי מדויק לחודש שלם. מורידים מהאתר ובוחרים כאן.</small></span>
@@ -52,7 +60,7 @@ export function render(el) {
     <details class="card help"><summary>${ic('question')} טיפים לצילום טוב</summary>
       <ul class="how"><li>צלם את מסך רשימת העסקאות, כשהשמות והסכומים נראים בבירור.</li>
       <li>אפשר לגלול ולצלם כמה צילומים ברצף ולבחור את כולם יחד. עסקאות שמופיעות בשני צילומים יסומנו ככפילות.</li>
-      <li>באנדרואיד אפשר גם לשתף צילום ישירות מהגלריה לשפע (אחרי שמתקינים אותה).</li>
+      <li>באנדרואיד אפשר גם לשתף צילום ישירות מהגלריה לכיס (אחרי שמתקינים אותה).</li>
       <li>לחודש שלם, קובץ האקסל מאתר ישראכרט מדויק יותר.</li></ul></details>`;
   const si = $('#shots-in', el);
   si.onchange = () => { const files = [...si.files]; si.value = ''; if (files.length) readShots(files); };
@@ -63,6 +71,7 @@ export function render(el) {
   const fi = $('#file-in', el);
   fi.onchange = () => { const file = fi.files[0]; fi.value = ''; if (file) readFile(el, file); };
   $('#opt-paste', el).onclick = () => { mode = 'paste'; render(el); };
+  $('#opt-slip', el).onclick = () => { mode = 'payslip'; render(el); };
   $('#opt-manual', el).onclick = () => openTxSheet(null);
 }
 
@@ -130,6 +139,78 @@ export async function readShots(files) {
   review0card = null; buildReview(groups, 'screenshot');
   review.removed = removed; review.failed = failed; review.shots = groups.length;
   mode = 'review'; render(el);
+}
+
+/* ---------------- salary slip ---------------- */
+function renderPayslip(el, err) {
+  el.innerHTML = `<section class="card">
+      <div class="card-h"><h2>${ic('hand-coins')} תלוש משכורת</h2><button class="btn small ghost" id="back" type="button">${ic('caret-right')}חזרה</button></div>
+      <p class="muted">צלם את התלוש (או בחר צילום/סריקה שלו). כיס מוצאת את השכר נטו, הברוטו, החודש והמעסיק.</p>
+      <label class="option drop slip" for="slip-in">
+        <span class="opt-ic" style="--c:#F6B829">${ic('scan')}</span>
+        <span class="opt-t"><b>בחירת צילום של התלוש</b><small>קורא על המכשיר. ת"ז, מספר חשבון, כתובת ונתוני מס נמחקים ולא נשמרים.</small></span>
+        <input id="slip-in" type="file" accept="image/*" hidden></label>
+      ${err ? `<div class="notice bad">${ic('warning')}<span>${esc(err)}</span></div>` : ''}
+      <p class="hint">${ic('info')} התלוש עצמו לא נשמר. נשמרים רק נטו, ברוטו, החודש ושם המעסיק.</p></section>`;
+  $('#back', el).onclick = () => { mode = null; render(el); };
+  const inp = $('#slip-in', el);
+  inp.onchange = () => { const f = inp.files[0]; inp.value = ''; if (f) readSlip(el, f); };
+}
+
+async function readSlip(el, file) {
+  busy = { ctl: { stop: false } };
+  el.innerHTML = `<section class="card reading"><div class="read-ic">${ic('scan')}</div><h2>קורא את התלוש…</h2>
+    <p class="muted" id="rd-sub">זה קורה בתוך הטלפון.</p><div class="progress"><i id="rd-bar" style="width:3%"></i></div></section>`;
+  let res = null, failed = false;
+  try {
+    let text = await readImage(file, (msg, p) => { if (msg) { const s = $('#rd-sub', el); if (s) s.textContent = msg; } else { const b = $('#rd-bar', el); if (b) b.style.width = `${Math.max(3, (p || 0) * 100).toFixed(0)}%`; } });
+    file = null;
+    res = parsePayslip(text, new Date());
+    text = '';
+  } catch { failed = true; }
+  await stopOcr();
+  busy = null;
+  if (failed) { mode = 'payslip'; return renderPayslip(el, location.hostname === 'localhost' ? 'קריאת צילומים עובדת רק באתר המותקן.' : 'לא הצלחתי לקרוא את הצילום. נסה צילום חד וישר של התלוש.'); }
+  showSlipResult(el, res);
+}
+
+function showSlipResult(el, r) {
+  const S = state.settings;
+  const months = Array.from({ length: 14 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 12 + i); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }).reverse();
+  if (!months.includes(r.monthKey)) months.unshift(r.monthKey);
+  const MN = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+  const label = k => `${MN[+k.slice(5) - 1]} ${k.slice(0, 4)}`;
+  el.innerHTML = `<section class="card slip-card">
+      <div class="card-h"><h2>${ic('hand-coins')} מה מצאתי בתלוש</h2><button class="btn small ghost" id="sl-cancel" type="button">${ic('x')}ביטול</button></div>
+      ${r.net ? '' : `<div class="notice">${ic('warning')}<span>לא הצלחתי למצוא את השכר נטו. אפשר להקליד אותו.</span></div>`}
+      <div class="slip-big"><span>נטו לתשלום</span><div class="field"><label for="sl-net" class="sr">נטו</label><input id="sl-net" type="number" inputmode="decimal" step="0.01" value="${r.net ?? ''}" placeholder="0"></div></div>
+      <div class="row2">
+        <div class="field"><label for="sl-gross">ברוטו</label><input id="sl-gross" type="number" inputmode="decimal" step="0.01" value="${r.gross ?? ''}"></div>
+        <div class="field"><label for="sl-month">תלוש של חודש</label><select id="sl-month">${months.map(k => `<option value="${k}" ${k === r.monthKey ? 'selected' : ''}>${label(k)}</option>`).join('')}</select></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label for="sl-date">התקבל בחשבון בתאריך</label><input id="sl-date" type="date" value="${isoOf(new Date())}"></div>
+        <div class="field"><label for="sl-emp">מעסיק</label><input id="sl-emp" type="text" maxlength="40" value="${esc(r.employer || '')}" placeholder="לא חובה"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="sl-upd" ${S.income ? '' : 'checked'}> <span>לעדכן גם את "הכנסה חודשית" בתקציב לסכום הזה (כרגע ${S.income ? money(S.income) : 'לא הוגדרה'})</span></label>
+      ${r.removed ? `<p class="hint">${ic('shield')} ${r.removed} פרטים אישיים מהתלוש נמחקו ולא נשמרו.</p>` : ''}
+      <p class="hint">${ic('info')} המשכורת נספרת בחודש התקציב שבו היא נכנסה לחשבון.</p>
+      <button class="btn primary wide" id="sl-save" type="button">${ic('check')}שמירת המשכורת</button></section>`;
+  $('#sl-cancel', el).onclick = () => { mode = null; render(el); };
+  $('#sl-save', el).onclick = () => {
+    const net = num($('#sl-net', el).value), gross = num($('#sl-gross', el).value), date = $('#sl-date', el).value;
+    const monthKey = $('#sl-month', el).value, emp = cleanField($('#sl-emp', el).value, 40);
+    if (!(net > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast('צריך סכום נטו ותאריך'); return; }
+    const dup = state.tx.find(t => t.kind === 'income' && t.source === 'payslip' && t.note && t.note.includes(`חודש ${monthKey}`));
+    if (dup && !$('#sl-save', el).classList.contains('armed')) {
+      $('#sl-save', el).classList.add('armed'); $('#sl-save', el).innerHTML = `${ic('warning')}כבר נשמר תלוש לחודש הזה. לחץ שוב כדי לשמור בכל זאת`; return;
+    }
+    upsertTx([{ id: uid(), date, merchant: emp ? `משכורת - ${emp}` : 'משכורת', amount: net, kind: 'income', category: 'other', source: 'payslip',
+      note: `תלוש חודש ${monthKey}${gross ? ` · ברוטו ${Math.round(gross)}` : ''}`, added: Date.now(), confirmed: true }]);
+    if ($('#sl-upd', el).checked) { state.settings.income = Math.round(net); persist(); }
+    const k = budgetKeyOf(date, state.settings.startDay); state.ui.curKey = k;
+    mode = null; toast('המשכורת נשמרה'); location.hash = 'home'; changed();
+  };
 }
 
 /* ---------------- files ---------------- */

@@ -6,14 +6,13 @@
 <!-- Nothing may load from, or be sent to, any other site. connect-src 'none' blocks every network request from the app's code. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta name="referrer" content="no-referrer">
-<title>שפע</title>
+<title>כיס</title>
 <meta name="description" content="ניהול תקציב חודשי פרטי ומוצפן - כמה נשאר להוציא, חיסכון, הוצאות קבועות ותקציב לקטגוריות.">
-<meta name="theme-color" content="#14967C" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0D1614" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#FFFFFF">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="שפע">
+<meta name="apple-mobile-web-app-title" content="כיס">
 <meta name="format-detection" content="telephone=no">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -25,14 +24,14 @@
 
 <div id="app" hidden>
   <div id="update-bar" class="update-bar" hidden>
-    <span>גרסה חדשה של שפע מוכנה.</span><button class="btn small" id="update-go" type="button">עדכון</button>
+    <span>גרסה חדשה של כיס מוכנה.</span><button class="btn small" id="update-go" type="button">עדכון</button>
   </div>
   <header class="top">
-    <div class="brand"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#plant"></use></svg><span>שפע</span></div>
+    <div class="brand"><span class="logo"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#wallet"></use></svg></span><span>כיס</span></div>
     <div id="month-bar" class="month">
-      <button id="m-next" type="button" aria-label="החודש הבא"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#caret-right"></use></svg></button>
+      <button id="m-prev" type="button" aria-label="החודש הקודם"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#caret-right"></use></svg></button>
       <span class="m-mid"><b id="m-label"></b><small id="m-range"></small></span>
-      <button id="m-prev" type="button" aria-label="החודש הקודם"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#caret-left"></use></svg></button>
+      <button id="m-next" type="button" aria-label="החודש הבא"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#caret-left"></use></svg></button>
       <button id="m-today" class="m-today" type="button" hidden>להיום</button>
     </div>
     <button class="icon-btn" id="lock-now" type="button" aria-label="נעילה"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#lock"></use></svg></button>
@@ -54,7 +53,7 @@
 </div>
 <div id="sheet-root"></div>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<noscript><p style="padding:24px">שפע צריכה JavaScript כדי לעבוד.</p></noscript>
+<noscript><p style="padding:24px">כיס צריכה JavaScript כדי לעבוד.</p></noscript>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

@@ -41,6 +41,7 @@ export function openTxSheet(t) {
     <div class="field" id="sh-cw"><label for="sh-c">קטגוריה</label><select id="sh-c">${catOptions(catById(t.category).id)}</select></div>
     ${state.settings.fixed.length ? `<div class="field" id="sh-fw"><label for="sh-f">זו הוצאה קבועה שכבר בתקציב?</label><select id="sh-f">${fixedOptions(t.fixedId)}</select></div>` : ''}
     <p class="hint">${ic('sparkle')} קטגוריה שתבחר לבית עסק נשמרת, ותשויך אוטומטית בפעם הבאה.</p>
+    ${isNew ? '' : `<a class="map-link" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((t.merchant + ' ' + (t.place || '')).trim())}" target="_blank" rel="noopener noreferrer">${ic('search')}איפה זה? חיפוש בגוגל מפות <small>(נשלח רק שם העסק)</small></a>`}
     <div class="row2">${isNew ? '' : `<button class="btn danger" id="sh-del" type="button">${ic('trash')}מחיקה</button>`}
       <button class="btn primary" id="sh-ok" type="button">${ic('check')}שמירה</button></div>`, (sh, close) => {
     const sync = () => { const k = $('#sh-k', sh).value; $('#sh-cw', sh).hidden = k !== 'expense'; const fw = $('#sh-fw', sh); if (fw) fw.hidden = k !== 'expense'; };
