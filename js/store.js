@@ -37,8 +37,9 @@ export function normalizeSettings(d) {
   if (d.rules && typeof d.rules === 'object') for (const [k, v] of Object.entries(d.rules)) s.rules[str(k, 80)] = str(v, 40);
   return s;
 }
+const validISO = d => { if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return false; const [y, m, dd] = d.split('-').map(Number); const x = new Date(y, m - 1, dd); return x.getFullYear() === y && x.getMonth() === m - 1 && x.getDate() === dd; };
 export function normalizeTx(t) {
-  if (!t || !/^\d{4}-\d{2}-\d{2}$/.test(t.date)) return null;
+  if (!t || !validISO(t.date)) return null;
   return {
     id: str(t.id) || uid(), date: t.date, time: /^\d{2}:\d{2}$/.test(t.time || '') ? t.time : null, place: str(t.place, 40), card: /^\d{4}$/.test(t.card || '') ? t.card : null,
     merchant: str(t.merchant) || 'ללא שם', amount: Math.round(num(t.amount) * 100) / 100,
@@ -62,24 +63,31 @@ export async function loadState() {
 export function replaceAll(d) {
   state.settings = normalizeSettings(d && d.settings);
   state.tx = Array.isArray(d && d.tx) ? d.tx.map(normalizeTx).filter(Boolean) : [];
-  persist(true);
+  state.ui.curKey = budgetKeyOf(isoOf(new Date()), state.settings.startDay);
+  return persist(true);
 }
 
-let timer = null, pendingSave = false;
+// Saves run one after another (never overlapping), always with the newest data; flushNow waits for all of them.
+let timer = null, pendingSave = false, chain = Promise.resolve();
+function runSave() {
+  pendingSave = false;
+  const snapshot = JSON.parse(JSON.stringify({ v: 1, settings: state.settings, tx: state.tx }));
+  chain = chain.then(() => vault.save(snapshot)).catch(() => {
+    pendingSave = true; // try again on the next change or flush
+    toast('השמירה לא הצליחה. נסה שוב, ואם זה חוזר - גבה את הנתונים.');
+  });
+  return chain;
+}
 export function persist(now) {
   pendingSave = true;
   clearTimeout(timer);
-  const go = () => {
-    pendingSave = false;
-    vault.save({ v: 1, settings: state.settings, tx: state.tx }).catch(() => toast('השמירה לא הצליחה. נסה שוב, ואם זה חוזר - גבה את הנתונים.'));
-  };
-  now ? go() : (timer = setTimeout(go, 120));
+  if (now) return runSave();
+  timer = setTimeout(runSave, 120);
 }
 export async function flushNow() {
   clearTimeout(timer);
-  if (!pendingSave || !vault.isUnlocked()) return;
-  pendingSave = false;
-  await vault.save({ v: 1, settings: state.settings, tx: state.tx });
+  if (pendingSave && vault.isUnlocked()) runSave();
+  await chain;
 }
 
 export const catById = id => state.settings.categories.find(c => c.id === id) || state.settings.categories.find(c => c.id === 'other');

@@ -138,9 +138,13 @@ export async function importBackup(text, pass) {
   let f;
   try { f = JSON.parse(text); } catch { throw { code: 'format' }; }
   if (f.format !== 'shefa-backup') throw { code: 'format' };
-  const key = await deriveKek(pass, unb64(f.salt), f.iter || ITER, ['encrypt', 'decrypt']);
+  const iter = Number(f.iter) || ITER;
+  if (iter < 10000 || iter > 5000000) throw { code: 'format' };
+  let salt, iv, data;
+  try { salt = unb64(f.salt); iv = unb64(f.iv); data = unb64(f.data); } catch { throw { code: 'format' }; }
+  const key = await deriveKek(pass, salt, iter, ['encrypt', 'decrypt']);
   try {
-    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(f.iv) }, key, unb64(f.data));
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
     return JSON.parse(dec.decode(pt));
   } catch { throw { code: 'wrong' }; }
 }

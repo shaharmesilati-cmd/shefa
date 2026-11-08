@@ -126,7 +126,7 @@ function restore(file) {
       try {
         if (file.size > 30 * 1024 * 1024) throw { code: 'format' };
         const d = await vault.importBackup(await file.text(), $('#rs-p', sh).value);
-        replaceAll(d); await flushNow(); close(); changed(); toast(`שוחזרו ${state.tx.length} תנועות`);
+        await replaceAll(d); await flushNow(); close(); changed(); toast(`שוחזרו ${state.tx.length} תנועות`);
       } catch (e) {
         btn.disabled = false; btn.innerHTML = `${ic('upload')}שחזור`;
         toast(e && e.code === 'wrong' ? 'הסיסמה שגויה' : 'זה לא קובץ גיבוי של Stashwise');

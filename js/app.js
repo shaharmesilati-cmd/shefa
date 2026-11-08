@@ -56,7 +56,7 @@ function lockScreen(mode) {
         const b = $('#rb-go', sh); b.disabled = true; b.innerHTML = '<span class="spin"></span>פותח…';
         try {
           const d = await vault.importBackup(await file.text(), $('#rb-p', sh).value);
-          await vault.create(p); replaceAll(d); await flushNow();
+          await vault.create(p); await replaceAll(d); await flushNow();
           try { await vault.setRemember($('#lk-rem').checked); } catch { }
           close(); markSet(); startApp(false); toast(`שוחזרו ${state.tx.length} תנועות`);
         } catch (x) { b.disabled = false; b.innerHTML = `${ic('upload')}שחזור`; toast(x && x.code === 'wrong' ? 'הסיסמה שגויה' : 'זה לא קובץ גיבוי של Stashwise'); }

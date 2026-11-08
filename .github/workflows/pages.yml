@@ -43,6 +43,9 @@ jobs:
           mkdir -p _site
           cp -r index.html manifest.webmanifest sw.js css js assets icons _site/
           touch _site/.nojekyll
+          # every publish gets a fresh offline-cache name, so phones always see the 'new version' prompt
+          sed -i "s/const VERSION = 'shefa-[^']*'/const VERSION = 'shefa-${GITHUB_SHA::10}'/" _site/sw.js
+          grep -q "shefa-${GITHUB_SHA::10}" _site/sw.js
           V=_site/vendor/tesseract
           mkdir -p $V/core $V/lang
           cp /tmp/ocr/node_modules/tesseract.js/dist/tesseract.min.js $V/

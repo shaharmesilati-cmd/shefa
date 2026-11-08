@@ -83,6 +83,12 @@ export function toISODate(v) {
 }
 export function toAmount(v) {
   if (typeof v === 'number') return v;
+  let t = String(v ?? '').trim();
+  const neg = /^\(.*\)$/.test(t); if (neg) t = t.slice(1, -1);
+  if (/^-?[\d.]{1,}\d,\d{1,2}$/.test(t.replace(/[₪\s]/g, '')) && /\.\d{3}/.test(t)) t = t.replace(/\./g, '').replace(',', '.'); // 1.234,56
+  else if (/^-?\d+,\d{1,2}$/.test(t.replace(/[₪\s]/g, ''))) t = t.replace(',', '.');                                          // 12,50
+  if (neg) t = '-' + t;
+  v = t;
   let s = String(v ?? '').replace(/[₪$€\s,]/g, '').replace(/[^\d.\-]/g, '');
   if (/^\d.*-$/.test(s)) s = '-' + s.slice(0, -1);
   const n = parseFloat(s);

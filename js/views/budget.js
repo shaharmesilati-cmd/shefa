@@ -96,7 +96,7 @@ function wire(el) {
   $$('[data-c]', el).forEach(i => i.oninput = () => { const c = S.categories.find(x => x.id === i.dataset.c); c[i.dataset.k] = i.dataset.k === 'budget' ? num(i.value) : i.value; save(); });
   $$('[data-del-fx]', el).forEach(b => armConfirm(b, () => { S.fixed = S.fixed.filter(x => x.id !== b.dataset.delFx); persist(); render(el); }));
   $$('[data-del-g]', el).forEach(b => armConfirm(b, () => { S.goals = S.goals.filter(x => x.id !== b.dataset.delG); persist(); render(el); }));
-  $$('[data-del-c]', el).forEach(b => armConfirm(b, () => { S.categories = S.categories.filter(x => x.id !== b.dataset.delC); persist(); render(el); toast('נמחקה. ההוצאות שלה עברו ל"שונות".'); }));
+  $$('[data-del-c]', el).forEach(b => armConfirm(b, () => { const gone = b.dataset.delC; S.categories = S.categories.filter(x => x.id !== gone); state.tx.forEach(t => { if (t.category === gone) t.category = 'other'; }); for (const k in S.rules) if (S.rules[k] === gone) delete S.rules[k]; persist(); render(el); toast('נמחקה. ההוצאות שלה עברו ל"שונות".'); }));
   $$('[data-dep]', el).forEach(b => b.onclick = () => { const g = S.goals.find(x => x.id === b.dataset.dep); g.saved = Math.round((g.saved + g.monthly) * 100) / 100; persist(); render(el); toast(`כל הכבוד! ${fmt0(g.monthly)} ₪ נוספו ל"${g.name || 'יעד'}"`); });
   $('#fx-add', el).onclick = () => { const f = { id: uid(), name: '', amount: 0, keyword: '' }; S.fixed.push(f); persist(); render(el); $('#fx-n-' + f.id).focus(); };
   $('#g-add', el).onclick = () => { const g = { id: uid(), name: '', target: 0, monthly: 0, saved: 0 }; S.goals.push(g); persist(); render(el); $('#g-n-' + g.id).focus(); };

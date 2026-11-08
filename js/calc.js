@@ -66,7 +66,9 @@ export function monthSummary(settings, allTx, key, today = new Date()) {
   const projectedEnd = available - projectedSpend;
 
   const byCat = {};
-  for (const t of variable) byCat[t.category || 'other'] = (byCat[t.category || 'other'] || 0) + t.amount;
+  const known = new Set((settings.categories || []).map(c => c.id));
+  const catOf = t => (t.category && (!known.size || known.has(t.category)) ? t.category : 'other');
+  for (const t of variable) byCat[catOf(t)] = (byCat[catOf(t)] || 0) + t.amount;
   const allocated = sum(settings.categories || [], c => c.budget);
   const fixedSeen = new Set(counted.filter(t => t.fixedId).map(t => t.fixedId));
 

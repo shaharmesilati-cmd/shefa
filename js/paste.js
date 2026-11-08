@@ -60,8 +60,11 @@ export function parseStatement(text, today = new Date()) {
     const tm = rest.match(TIME);
     if (tm) rest = rest.replace(tm[0], ' ');
     let date = null;
-    for (const dm of rest.matchAll(DATE_G)) { const d = dateFrom(dm, today); if (d) { date = d; rest = rest.replace(dm[0], ' '); break; } }
+    let dateTxt = null, dateHasYear = false;
+    for (const dm of rest.matchAll(DATE_G)) { const d = dateFrom(dm, today); if (d) { date = d; dateTxt = dm[0]; dateHasYear = !!dm[3]; rest = rest.replace(dm[0], ' '); break; } }
     if (!a) { a = (rest.match(PLAIN) || [])[0] || null; if (a) rest = rest.replace(a, ' '); }
+    // "קפה 15.10" - a name with one d.mm number and no year is a price, not a date
+    if (!a && date && !dateHasYear && /^\d{1,3}\.\d{2}$/.test(dateTxt) && hasWords(cleanName(rest))) { a = dateTxt; date = null; }
     const name = cleanName(rest);
     const isName = hasWords(name) && !SKIP.test(name) && !HEADING.test(name);
     if ((SKIP.test(line) || HEADING.test(name)) && !a) continue;

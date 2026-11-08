@@ -165,5 +165,12 @@ console.log('v1.2 tests passed');
     assert.equal(classify('מספרת דנה', { ids }).cat, 'other', 'unknown -> ask');
     assert.ok(sameBusiness('טעינות - חבר של קבע', 'טעינות "חבר" טעמים') && !sameBusiness('שופרסל', 'רמי לוי'));
   }
+  {
+    const { cleanField } = await import('../js/sanitize.js');
+    for (const n of ['Shopping Mall', 'Spinneys', 'Pinkberry', 'מסגרת תמונות', "Gold's Gym 2024"]) assert.equal(cleanField(n), n, 'shop names are kept: ' + n);
+    assert.equal(toAmount('1.234,56'), 1234.56); assert.equal(toAmount('(123.45)'), -123.45);
+    assert.deepEqual(parseStatement('קפה ג\'ו 15.10\n06.11.26', new Date(2026, 10, 8)).rows.map(r => [r.amount, r.date]), [[15.1, '2026-11-06']], 'a d.mm number after a name is a price');
+    const { normalizeTx } = await import('../js/store.js').catch(() => ({}));
+  }
   console.log('v2 tests passed');
 }

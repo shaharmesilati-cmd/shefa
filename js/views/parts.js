@@ -55,7 +55,7 @@ export function openTxSheet(t) {
       const time = $('#sh-t', sh).value, place = cleanField($('#sh-p', sh).value, 40);
       const c4 = $('#sh-c4', sh).value.replace(/\D/g, '');
       if (c4 && c4.length !== 4) { toast('בכרטיס רושמים בדיוק 4 ספרות'); return; }
-      upsertTx([{ ...t, card: c4 || null, merchant: cleanField(merchant), amount, date, time: time || null, place, kind, category: cat, fixedId: kind === 'expense' && $('#sh-f', sh) ? ($('#sh-f', sh).value || null) : null }]);
+      upsertTx([{ ...t, confirmed: true, card: c4 || null, merchant: cleanField(merchant), amount, date, time: time || null, place, kind, category: cat, fixedId: kind === 'expense' && $('#sh-f', sh) ? ($('#sh-f', sh).value || null) : null }]);
       close(); changed(); toast(isNew ? 'נוסף' : 'נשמר');
     };
   });
