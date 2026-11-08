@@ -30,6 +30,7 @@ async function tx(mode, fn) {
 }
 const get = k => tx('readonly', s => s.get(k));
 const put = (k, v) => tx('readwrite', s => { s.put(v, k); });
+const del = k => tx('readwrite', s => { s.delete(k); });
 
 async function deriveKek(pass, salt, iter, usages) {
   const base = await crypto.subtle.importKey('raw', enc.encode(String(pass).normalize('NFC')), 'PBKDF2', false, ['deriveKey']);
@@ -86,6 +87,20 @@ export async function changePass(oldPass, newPass) {
 }
 
 export function lock() { dataKey = null; }
+
+/* "Stay signed in on this device": the data key is kept in this browser's storage as a non-exportable key,
+   so the app opens without the passcode. The phone's own screen lock then protects it. */
+export async function setRemember(on) {
+  if (on) { if (!dataKey) throw { code: 'locked' }; await put('remember', { key: dataKey, at: Date.now() }); }
+  else await del('remember');
+}
+export async function isRemembered() { const r = await get('remember'); return !!(r && r.key); }
+export async function openRemembered() {
+  const r = await get('remember');
+  if (!r || !r.key) return false;
+  dataKey = r.key;
+  try { await load(); return true; } catch { dataKey = null; await del('remember'); return false; }
+}
 
 export async function load() {
   if (!dataKey) throw { code: 'locked' };

@@ -29,6 +29,7 @@ function lockScreen(mode) {
         <button type="button" class="icon-btn" id="lk-eye" aria-label="הצג קוד">${ic('eye')}</button></div></div>
       ${setup ? `<div class="field"><label for="lk-pass2">שוב את אותו קוד</label><input id="lk-pass2" type="password" autocomplete="new-password" required></div>
         <label class="check"><input type="checkbox" id="lk-ok"> <span>הבנתי: אין שום דרך לשחזר קוד שנשכח. בלי הקוד הנתונים לא נפתחים, ולכן כדאי לגבות מדי פעם.</span></label>` : ''}
+      <label class="check"><input type="checkbox" id="lk-rem" checked> <span>להישאר מחובר במכשיר הזה - בלי קוד בכל פתיחה (נעילת הטלפון שומרת עליו). אפשר לשנות במסך "עוד".</span></label>
       <div id="lk-err" class="form-err" role="alert" hidden></div>
       <button class="btn primary wide" id="lk-go" type="submit">${setup ? ic('lock-key') + 'יצירת כספת והתחלה' : ic('lock') + 'פתיחה'}</button>
       ${setup ? '' : `<button class="link-btn" type="button" id="lk-forgot">שכחתי את הקוד</button>`}
@@ -58,6 +59,7 @@ function lockScreen(mode) {
         await loadState();
       }
       pass.value = '';
+      try { await vault.setRemember($('#lk-rem').checked); } catch { }
       startApp(setup);
     } catch (x) {
       go.disabled = false; go.innerHTML = setup ? ic('lock-key') + 'יצירת כספת והתחלה' : ic('lock') + 'פתיחה';
@@ -82,10 +84,13 @@ function forgotFlow() {
 }
 
 /* ---------------- app shell ---------------- */
-function startApp(firstRun) {
+export const session = { remembered: false };
+async function startApp(firstRun) {
   $('#lock').hidden = true; $('#lock').innerHTML = '';
   $('#app').hidden = false;
-  startAutoLock();
+  session.remembered = await vault.isRemembered().catch(() => false);
+  $('#lock-now').hidden = session.remembered;
+  if (!session.remembered) startAutoLock();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
   show(firstRun ? 'budget' : (location.hash.slice(1) || 'home'));
   if (firstRun) toast('הכספת נוצרה. נתחיל מההכנסה וההוצאות הקבועות.');
@@ -156,6 +161,8 @@ export async function lockNow() {
   vault.lock();
   location.reload(); // drops everything that was in memory
 }
+export function stopAutoLock() { clearInterval(lockTimer); lockTimer = null; }
+export { startAutoLock };
 function startAutoLock() {
   const bump = () => { lastActive = Date.now(); };
   ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(ev => addEventListener(ev, bump, { passive: true }));
@@ -167,7 +174,7 @@ function startAutoLock() {
 document.addEventListener('visibilitychange', () => {
   if (!vault.isUnlocked()) return;
   if (document.hidden) { hiddenAt = Date.now(); flushNow().catch(() => { }); }
-  else if (hiddenAt && Date.now() - hiddenAt > 60000) lockNow();
+  else if (!session.remembered && hiddenAt && Date.now() - hiddenAt > 60000) lockNow();
 });
 addEventListener('pagehide', () => { flushNow().catch(() => { }); });
 
@@ -195,7 +202,10 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 (async () => {
   try {
     if (!window.crypto || !crypto.subtle || !window.indexedDB) throw new Error('unsupported');
-    lockScreen((await vault.exists()) ? 'unlock' : 'setup');
+    if (await vault.exists()) {
+      if (await vault.openRemembered()) { await loadState(); startApp(false); return; }
+      lockScreen('unlock');
+    } else lockScreen('setup');
   } catch {
     $('#lock').hidden = false;
     $('#lock').innerHTML = `<div class="lock-card"><h1>Stashwise</h1><p>הדפדפן הזה לא תומך בהצפנה ובשמירה מקומית (אולי זו גלישה פרטית). פתח את האתר בדפדפן רגיל - Chrome או Safari.</p></div>`;

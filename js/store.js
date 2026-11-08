@@ -72,7 +72,7 @@ export function persist(now) {
     pendingSave = false;
     vault.save({ v: 1, settings: state.settings, tx: state.tx }).catch(() => toast('השמירה לא הצליחה. נסה שוב, ואם זה חוזר - גבה את הנתונים.'));
   };
-  now ? go() : (timer = setTimeout(go, 350));
+  now ? go() : (timer = setTimeout(go, 120));
 }
 export async function flushNow() {
   clearTimeout(timer);

@@ -2,9 +2,9 @@ import * as vault from '../vault.js';
 import { state, persist, replaceAll, flushNow, changed } from '../store.js';
 import { $, esc, ic, toast, openSheet, download, armConfirm, monthName } from '../util.js';
 import { budgetKeyOf } from '../calc.js';
-import { install, lockNow } from '../app.js';
+import { install, lockNow, session, startAutoLock, stopAutoLock } from '../app.js';
 
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
@@ -25,11 +25,15 @@ export function render(el) {
       <li>${ic('x')}<span>אין חשבון, אין שרת ואין מעקב. האפליקציה חסומה טכנית מלשלוח מידע לאינטרנט.</span></li>
       <li>${ic('bank')}<span>Stashwise לא מבקשת סיסמאות של הבנק או של האשראי, אף פעם. את הקבצים אתה מוריד בעצמך.</span></li>
     </ul>
+    <div class="field"><label for="rem">כניסה לאפליקציה</label><select id="rem">
+      <option value="1" ${session.remembered ? 'selected' : ''}>בלי קוד במכשיר הזה (מומלץ לטלפון אישי)</option>
+      <option value="0" ${session.remembered ? '' : 'selected'}>לבקש קוד בכל פתיחה</option></select></div>
+    <p class="hint" id="persist-line">${ic('check')} הנתונים נשמרים במכשיר עד שתמחק אותם בעצמך.</p>
     <div class="row2">
-      <div class="field"><label for="al">נעילה אוטומטית אחרי</label><select id="al">${[1, 5, 15, 30].map(m => `<option value="${m}" ${S.autoLockMin === m ? 'selected' : ''}>${m === 1 ? 'דקה' : m + ' דקות'} ללא שימוש</option>`).join('')}</select></div>
+      <div class="field" ${session.remembered ? 'hidden' : ''}><label for="al">נעילה אוטומטית אחרי</label><select id="al">${[1, 5, 15, 30].map(m => `<option value="${m}" ${S.autoLockMin === m ? 'selected' : ''}>${m === 1 ? 'דקה' : m + ' דקות'} ללא שימוש</option>`).join('')}</select></div>
       <div class="field"><label for="nm">השם שלך</label><input id="nm" type="text" maxlength="30" value="${esc(S.name)}"></div>
     </div>
-    <div class="btn-row"><button class="btn" id="chg" type="button">${ic('lock-key')}החלפת קוד</button><button class="btn" id="lock" type="button">${ic('lock')}נעילה עכשיו</button></div></section>
+    <div class="btn-row"><button class="btn" id="chg" type="button">${ic('lock-key')}החלפת קוד</button><button class="btn" id="lock-btn" type="button">${ic('lock')}${session.remembered ? 'נעילה (לבקש קוד מעכשיו)' : 'נעילה עכשיו'}</button></div></section>
 
   <section class="card"><div class="card-h"><h2>${ic('download')} גיבוי והעברה למכשיר אחר</h2></div>
     <p class="hint">הגיבוי הוא קובץ מוצפן בסיסמה שתבחר. שמור אותו במקום בטוח (למשל בכונן שלך). כדי לעבור לטלפון אחר - שחזר בו את הקובץ.</p>
@@ -51,9 +55,19 @@ export function render(el) {
 
   const inst = $('#inst', el);
   if (inst) inst.onclick = async () => { install.prompt.prompt(); await install.prompt.userChoice.catch(() => { }); install.prompt = null; render(el); };
+  $('#rem', el).onchange = async e => {
+    const on = e.target.value === '1';
+    try { await vault.setRemember(on); session.remembered = on; $('#lock-now').hidden = on; on ? stopAutoLock() : startAutoLock();
+      toast(on ? 'מעכשיו האפליקציה נפתחת בלי קוד במכשיר הזה' : 'מעכשיו יתבקש קוד בכל פתיחה'); render(el);
+    } catch { toast('לא הצלחתי לשמור את ההגדרה'); }
+  };
+  if (navigator.storage && navigator.storage.persisted) navigator.storage.persisted().then(ok => {
+    const l = $('#persist-line', el); if (!l) return;
+    if (!ok) navigator.storage.persist && navigator.storage.persist().then(g => { if (!g && l.isConnected) l.innerHTML = `${ic('info')} כדי שהדפדפן לא ינקה את הנתונים לעולם, התקן את האפליקציה למסך הבית, ומדי פעם צור גיבוי.`; }).catch(() => { });
+  }).catch(() => { });
   $('#al', el).onchange = e => { S.autoLockMin = +e.target.value; persist(); toast('נשמר'); };
   $('#nm', el).oninput = e => { S.name = e.target.value.slice(0, 30); persist(); };
-  $('#lock', el).onclick = () => lockNow();
+  $('#lock-btn', el).onclick = async () => { if (session.remembered) { await vault.setRemember(false).catch(() => { }); } lockNow(); };
   $('#upd', el).onclick = async () => { if (install.checkUpdate) { await install.checkUpdate().catch(() => { }); toast('בדקתי. אם יש גרסה חדשה תופיע הודעה למעלה.'); } else toast('בדיקת עדכונים פועלת רק כשהאתר פתוח מהאינטרנט.'); };
   $('#chg', el).onclick = changeCode;
   $('#bk', el).onclick = backup;
