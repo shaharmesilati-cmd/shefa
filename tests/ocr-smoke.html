@@ -1,0 +1,16 @@
+<!doctype html><meta charset="utf-8"><title>OCR smoke test</title>
+<script type="module">
+// Runs the real on-device reader on two fake card-app screenshots (the card number in them is made up).
+import { readImage, stopOcr } from './js/ocr.js';
+import { parseStatement } from './js/paste.js';
+const out = {};
+try {
+  for (const n of ['light', 'dark']) {
+    const blob = await (await fetch(`fixtures/sample-${n}.png`)).blob();
+    const text = await readImage(blob);
+    out[n] = parseStatement(text, new Date(2026, 10, 8, 20));
+  }
+  await stopOcr();
+} catch (e) { out.error = String(e && e.message || e); }
+window.__done = out;
+</script>

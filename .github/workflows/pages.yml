@@ -53,6 +53,13 @@ jobs:
           cp /tmp/ocr/node_modules/tesseract.js/LICENSE.md $V/LICENSE-tesseract.js.md || true
           echo "Files:" && find _site -type f | sort && du -sh _site
 
+      - name: Check the screenshot reader on sample screenshots (real browser)
+        run: |
+          rm -rf /tmp/t && cp -r _site /tmp/t
+          cp -r tests/ocr-smoke.html tests/fixtures /tmp/t/
+          cd /tmp/ocr && npm install --no-audit --no-fund --ignore-scripts puppeteer-core@23.11.1
+          NODE_PATH=/tmp/ocr/node_modules node $GITHUB_WORKSPACE/tests/ocr-smoke.cjs /tmp/t
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
