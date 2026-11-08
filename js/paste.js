@@ -34,6 +34,8 @@ export function parseStatement(text, today = new Date()) {
   let seenContent = false;
   for (let line of safe.split(/\n+/)) {
     line = line.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').replace(/[|_~^«»]/g, ' ').replace(/\s+/g, ' ').trim();
+    const cm = [...line.matchAll(/⟦C(\d{4})⟧/g)];
+    if (cm.length) { tokens.push({ t: 'cardctx', v: cm[cm.length - 1][1] }); line = line.replace(/⟦C\d{4}⟧/g, ' ').trim(); }
     if (!line) continue;
     let rest = line;
     const inst = rest.match(INST);
@@ -64,9 +66,10 @@ export function parseStatement(text, today = new Date()) {
     }
   }
   // group tokens into rows: a row closes when a slot that is already filled appears again
-  const rows = []; let cur = {}, lastDate = null;
-  const close = () => { if (cur.amount !== undefined && cur.name) rows.push(cur); cur = {}; };
+  const rows = []; let cur = {}, lastDate = null, card = null, firstCard = null;
+  const close = () => { if (cur.amount !== undefined && cur.name) rows.push({ ...cur, card: cur.card || card }); cur = {}; };
   for (const k of tokens) {
+    if (k.t === 'cardctx') { if (cur.name && cur.amount !== undefined) close(); card = k.v; firstCard = firstCard || k.v; continue; }
     if (k.t === 'line') { if (cur.name && cur.amount !== undefined) close(); continue; }
     if (cur[k.t] !== undefined) close();
     if (k.t === 'amount') { cur.amount = k.v; cur.fx = k.fx; } else cur[k.t] = k.v;
@@ -76,7 +79,7 @@ export function parseStatement(text, today = new Date()) {
     removed,
     rows: rows.map(r => {
       if (r.date) lastDate = r.date;
-      return { date: r.date || lastDate || isoOf(today), time: r.time || null, merchant: r.name, place: placeOf(r.name), amount: r.amount,
+      return { card: r.card || firstCard || null, date: r.date || lastDate || isoOf(today), time: r.time || null, merchant: r.name, place: placeOf(r.name), amount: r.amount,
         installment: r.inst || null, foreign: !!r.fx, dateGuessed: !r.date && !lastDate };
     }),
   };

@@ -4,6 +4,7 @@ import { $, esc, ic, money } from '../util.js';
 import { txRow, openTxSheet } from './parts.js';
 
 const f = { q: '', cat: '' };
+const cards = () => [...new Set(state.tx.map(t => t.card).filter(Boolean))].sort();
 
 export function render(el) {
   el.innerHTML = `<section class="card">
@@ -23,6 +24,7 @@ export function update(el) {
   const sel = $('#ex-cat', el);
   if (!sel) return render(el);
   sel.innerHTML = `<option value="">כל התנועות</option><option value="__var">הוצאות משתנות</option><option value="__fixed">הוצאות קבועות</option><option value="__income">הכנסות</option><option value="__card">תשלומי כרטיס (לא נספרים)</option>`
+    + (cards().length > 1 ? `<optgroup label="כרטיס">${cards().map(c => `<option value="card:${esc(c)}">כרטיס ${esc(c)}</option>`).join('')}</optgroup>` : '')
     + `<optgroup label="קטגוריה">${state.settings.categories.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</optgroup>`;
   sel.value = [...sel.options].some(o => o.value === f.cat) ? f.cat : '';
   list(el);
@@ -37,6 +39,7 @@ function list(el) {
   else if (f.cat === '__fixed') tx = tx.filter(t => exp(t) && t.fixedId);
   else if (f.cat === '__income') tx = tx.filter(t => t.kind === 'income');
   else if (f.cat === '__card') tx = tx.filter(t => t.kind === 'card-payment');
+  else if (f.cat.startsWith('card:')) tx = tx.filter(t => t.card === f.cat.slice(5));
   else if (f.cat) tx = tx.filter(t => exp(t) && catById(t.category).id === f.cat);
   const spend = tx.filter(exp).reduce((a, t) => a + t.amount, 0);
   $('#ex-total', el).innerHTML = `${tx.length} תנועות${spend ? ' · הוצאות ' + money(spend) : ''}`;

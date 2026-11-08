@@ -5,7 +5,7 @@ import { readWorkbook, extractRows, rowsToTx } from '../importers.js';
 import { parseStatement, placeOf } from '../paste.js';
 import { readImage, stopOcr } from '../ocr.js';
 import { markDuplicates } from '../dedupe.js';
-import { cleanField } from '../sanitize.js';
+import { cleanField, cardOf } from '../sanitize.js';
 import { guessCategory, looksLikeCardPayment, matchFixed } from '../categorize.js';
 import { catOptions, kindOptions, openTxSheet } from './parts.js';
 
@@ -15,6 +15,7 @@ let fileCtx = null;
 let pasted = '';
 let busy = null;          // { ctl:{stop:boolean} } while reading screenshots
 let host = null;
+let review0card = null;   // card of the file being imported (from its title), if any
 
 const IMG_TYPES = /^image\/(png|jpe?g|webp|gif|heic|heif|bmp)$/i;
 
@@ -126,7 +127,7 @@ export async function readShots(files) {
     $('#add-status', el).innerHTML = `<div class="notice bad">${ic('warning')}<span>לא מצאתי עסקאות בצילומים. ודא שרואים בהם את רשימת העסקאות עם הסכומים, או נסה צילום חד יותר.</span></div>`;
     return;
   }
-  buildReview(groups, 'screenshot');
+  review0card = null; buildReview(groups, 'screenshot');
   review.removed = removed; review.failed = failed; review.shots = groups.length;
   mode = 'review'; render(el);
 }
@@ -141,6 +142,7 @@ async function readFile(el, file) {
     const { rows, mapping } = extractRows(sheets);
     if (!rows.length || !mapping) throw { code: 'empty' };
     fileCtx = { rows, mapping, type: mapping.type, name: file.name };
+    review0card = cardOf(file.name + '\n' + sheets.map(sh => sh.slice(0, 8).map(r => r.join(' ')).join('\n')).join('\n')) || null;
     buildReview([rowsToTx(rows, { type: fileCtx.type })], fileCtx.type === 'bank' ? 'bank' : 'card');
     review.file = true;
     mode = 'review'; render(el);
@@ -172,7 +174,7 @@ function renderPaste(el) {
     const res = parseStatement(ta.value);
     if (!res.rows.length) { $('#paste-err', el).innerHTML = `<div class="notice bad">${ic('warning')}<span>לא מצאתי עסקאות בטקסט. ודא שהעתקת את רשימת העסקאות עם הסכומים.</span></div>`; return; }
     pasted = ''; ta.value = '';
-    buildReview([res.rows], 'paste'); review.removed = res.removed; mode = 'review'; render(el);
+    review0card = null; buildReview([res.rows], 'paste'); review.removed = res.removed; mode = 'review'; render(el);
   };
 }
 
@@ -183,7 +185,7 @@ function toRow(x, source) {
   const merchant = cleanField(x.merchant) || 'ללא שם';
   if (kind === 'expense' && source === 'bank' && looksLikeCardPayment(merchant)) kind = 'card-payment';
   const fx = kind === 'expense' ? matchFixed(merchant, S.fixed) : null;
-  return { id: uid(), date: x.date, time: x.time || null, merchant, place: x.place || placeOf(merchant), amount: x.amount, kind,
+  return { id: uid(), card: /^\d{4}$/.test(x.card || '') ? x.card : (review0card || null), date: x.date, time: x.time || null, merchant, place: x.place || placeOf(merchant), amount: x.amount, kind,
     category: guessCategory(merchant, S.rules, ids), installment: x.installment || null, foreign: !!x.foreign,
     note: cleanField(x.note, 120), fixedId: fx ? fx.id : null, on: true, dup: null, guessed: !!x.dateGuessed };
 }
@@ -219,7 +221,7 @@ function renderReview(el) {
       <input type="checkbox" data-k="on" ${r.on ? 'checked' : ''} aria-label="לשמור את ${esc(r.merchant)}">
       <div class="rev-main">
         <div class="rev-top"><b class="rev-name">${esc(r.merchant)}</b><b class="rev-amt">${money(r.amount, 'auto')}</b></div>
-        <div class="rev-meta">${ic('calendar')}<span>${shortDate(r.date)}${r.time ? ' · ' + esc(r.time) : ''}</span>${r.place ? `<span>· ${esc(r.place)}</span>` : ''}
+        <div class="rev-meta">${ic('calendar')}<span>${shortDate(r.date)}${r.time ? ' · ' + esc(r.time) : ''}</span>${r.place ? `<span>· ${esc(r.place)}</span>` : ''}${r.card ? `<span class="chip">${ic('card')}${esc(r.card)}</span>` : ''}
           ${r.dup ? `<span class="chip warn">${r.dup === 'saved' ? 'כבר שמורה' : 'בצילום אחר'}</span>` : ''}
           ${r.fixedId ? `<span class="chip lilac">${ic('lock')}קבועה</span>` : ''}${r.installment ? `<span class="chip">תשלום ${esc(r.installment)}</span>` : ''}
           ${r.foreign ? `<span class="chip peach">מט"ח</span>` : ''}${r.guessed ? `<span class="chip warn">בדוק תאריך</span>` : ''}${r.amount < 0 ? `<span class="chip good">זיכוי</span>` : ''}</div>
@@ -230,7 +232,8 @@ function renderReview(el) {
           <div class="field"><label for="rv-d-${i}">תאריך</label><input id="rv-d-${i}" type="date" data-k="date" value="${esc(r.date)}"></div>
           <div class="field"><label for="rv-t-${i}">שעה</label><input id="rv-t-${i}" type="time" data-k="time" value="${esc(r.time || '')}"></div>
           <div class="field"><label for="rv-p-${i}">מקום</label><input id="rv-p-${i}" type="text" data-k="place" value="${esc(r.place || '')}"></div>
-          <div class="field wide"><label for="rv-k-${i}">סוג</label><select id="rv-k-${i}" data-k="kind">${kindOptions(r.kind)}</select></div>
+          <div class="field"><label for="rv-c4-${i}">כרטיס (4 ספרות)</label><input id="rv-c4-${i}" type="text" inputmode="numeric" maxlength="4" pattern="\\d{4}" data-k="card" value="${esc(r.card || '')}"></div>
+          <div class="field"><label for="rv-k-${i}">סוג</label><select id="rv-k-${i}" data-k="kind">${kindOptions(r.kind)}</select></div>
         </div></details>
       </div></div>`).join('')}</div>
     <div class="savebar"><span id="rv-sum"></span><button class="btn primary" id="rv-save" type="button">${ic('check')}שמירה</button></div>`;
@@ -279,7 +282,7 @@ function save(el) {
   for (const r of chosen) if (r.touched && r.kind === 'expense') { state.settings.rules[normMerchant(r.merchant)] = r.category; learned = true; }
   if (learned) persist();
   upsertTx(chosen.map((r, i) => ({ id: r.id, date: r.date, time: /^\d{2}:\d{2}$/.test(r.time || '') ? r.time : null, merchant: cleanField(r.merchant), place: cleanField(r.place, 40),
-    amount: num(r.amount), kind: r.kind, category: r.category, fixedId: r.kind === 'expense' ? r.fixedId : null, installment: r.installment,
+    card: /^\d{4}$/.test(r.card || '') ? r.card : null, amount: num(r.amount), kind: r.kind, category: r.category, fixedId: r.kind === 'expense' ? r.fixedId : null, installment: r.installment,
     foreign: r.foreign, note: r.note, source: review.source, added: now + i })));
   const keys = [...new Set(chosen.map(r => budgetKeyOf(r.date, state.settings.startDay)))].sort();
   if (keys.length && !keys.includes(state.ui.curKey)) state.ui.curKey = keys[keys.length - 1];

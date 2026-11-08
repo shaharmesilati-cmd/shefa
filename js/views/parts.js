@@ -14,7 +14,7 @@ export function txRow(t) {
   return `<button class="tx" data-tx="${esc(t.id)}" type="button">
     ${isIncome ? `<span class="cat-ic" style="--c:#21A38A">${ic('hand-coins')}</span>` : catIcon(c)}
     <span class="tx-mid"><span class="tx-m">${esc(t.merchant)}</span>
-      <span class="tx-s"><span>${shortDate(t.date)}${t.time ? ' · ' + esc(t.time) : ''}</span>${t.place ? `<span>${esc(t.place)}</span>` : ''}${isIncome || t.kind === 'card-payment' ? '' : `<span>${esc(c.name)}</span>`}
+      <span class="tx-s"><span>${shortDate(t.date)}${t.time ? ' · ' + esc(t.time) : ''}</span>${t.place ? `<span>${esc(t.place)}</span>` : ''}${t.card ? `<span class="chip">${ic('card')}${esc(t.card)}</span>` : ''}${isIncome || t.kind === 'card-payment' ? '' : `<span>${esc(c.name)}</span>`}
       ${kind}${f ? `<span class="chip lilac">${ic('lock')}קבועה</span>` : ''}
       ${t.installment ? `<span class="chip">תשלום ${esc(t.installment)}</span>` : ''}
       ${t.foreign ? `<span class="chip peach">מט"ח</span>` : ''}</span></span>
@@ -36,6 +36,7 @@ export function openTxSheet(t) {
       <div class="field"><label for="sh-d">תאריך</label><input id="sh-d" type="date" value="${esc(t.date)}"></div></div>
     <div class="row2"><div class="field"><label for="sh-t">שעה (לא חובה)</label><input id="sh-t" type="time" value="${esc(t.time || '')}"></div>
       <div class="field"><label for="sh-p">מקום (לא חובה)</label><input id="sh-p" type="text" maxlength="40" value="${esc(t.place || '')}"></div></div>
+    <div class="field"><label for="sh-c4">איזה כרטיס - 4 ספרות אחרונות (לא חובה)</label><input id="sh-c4" type="text" inputmode="numeric" maxlength="4" value="${esc(t.card || '')}" placeholder="למשל 1234"></div>
     <div class="field"><label for="sh-k">סוג</label><select id="sh-k">${kindOptions(t.kind)}</select></div>
     <div class="field" id="sh-cw"><label for="sh-c">קטגוריה</label><select id="sh-c">${catOptions(catById(t.category).id)}</select></div>
     ${state.settings.fixed.length ? `<div class="field" id="sh-fw"><label for="sh-f">זו הוצאה קבועה שכבר בתקציב?</label><select id="sh-f">${fixedOptions(t.fixedId)}</select></div>` : ''}
@@ -51,7 +52,9 @@ export function openTxSheet(t) {
       const kind = $('#sh-k', sh).value, cat = $('#sh-c', sh).value;
       if (kind === 'expense' && (isNew || cat !== t.category)) { state.settings.rules[normMerchant(merchant)] = cat; persist(); }
       const time = $('#sh-t', sh).value, place = cleanField($('#sh-p', sh).value, 40);
-      upsertTx([{ ...t, merchant: cleanField(merchant), amount, date, time: time || null, place, kind, category: cat, fixedId: kind === 'expense' && $('#sh-f', sh) ? ($('#sh-f', sh).value || null) : null }]);
+      const c4 = $('#sh-c4', sh).value.replace(/\D/g, '');
+      if (c4 && c4.length !== 4) { toast('בכרטיס רושמים בדיוק 4 ספרות'); return; }
+      upsertTx([{ ...t, card: c4 || null, merchant: cleanField(merchant), amount, date, time: time || null, place, kind, category: cat, fixedId: kind === 'expense' && $('#sh-f', sh) ? ($('#sh-f', sh).value || null) : null }]);
       close(); changed(); toast(isNew ? 'נוסף' : 'נשמר');
     };
   });

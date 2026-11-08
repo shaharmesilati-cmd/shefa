@@ -1,13 +1,18 @@
 // Removes anything that could help someone misuse a credit card or account, BEFORE the text is parsed.
 // Runs on every piece of text that comes from a screenshot, a paste or a file.
 
+// Only the LAST 4 digits of a card are kept (to know which card paid), as a marker: ⟦C1234⟧
+const last4 = m => { const d = m.replace(/\D/g, ''); return d.length >= 4 ? ` ⟦C${d.slice(-4)}⟧ ` : ' '; };
 const RULES = [
-  // full or partial card numbers: 8-19 digits, optionally split by spaces or dashes
-  [/(?<![\d.,:/])(?:\d[ \-]?){7,18}\d(?![\d.,:/])/g, 'card'],
-  // masked card numbers like **** 1234, •••• 1234, xxxx-1234
-  [/[*•●xX]{2,}[ \-]?\d{2,4}/g, 'card'],
-  // "card ending in 1234", "כרטיס 1234", "אשראי 1234"
-  [/(כרטיס|אשראי|ויזה|visa|mastercard|מאסטרקארד|אמקס|amex|דיינרס|המסתיים ב|מסתיים ב|ending in|card)[^\n\d]{0,12}\d{4}\b/gi, 'card'],
+  // full card numbers: 13-19 digits, optionally split by spaces or dashes -> keep last 4
+  [/(?<![\d.,:/])(?:\d[ \-]?){12,18}\d(?![\d.,:/])/g, 'card', last4],
+  // other long digit runs (8-12 digits) could be account or card fragments -> remove
+  [/(?<![\d.,:/])(?:\d[ \-]?){7,11}\d(?![\d.,:/])/g, 'number'],
+  // masked card numbers like **** 1234, •••• 1234, xxxx-1234 -> keep last 4
+  [/[*•●xX]{2,}[ \-]?\d{4}(?!\d)/g, 'card', last4],
+  [/[*•●xX]{2,}[ \-]?\d{1,3}(?!\d)/g, 'card'],
+  // "card ending in 1234", "כרטיס 1234", "אשראי 1234" -> keep last 4
+  [/(כרטיס|אשראי|ויזה|visa|mastercard|מאסטרקארד|אמקס|amex|דיינרס|המסתיים ב|מסתיים ב|ending in|card)[^\n\d]{0,12}\d{4}(?!\d)/gi, 'card', last4],
   // expiry date next to its label
   [/(תוקף|תוקפו|valid|exp\.?|expiry|expires)[^\n\d]{0,8}\d{1,2}\s?[\/.\-]\s?\d{2,4}/gi, 'expiry'],
   // security code
@@ -30,11 +35,20 @@ export function redactSensitive(text) {
     return true;
   });
   let out = lines.join('\n');
-  for (const [re] of RULES) out = out.replace(re, () => { removed++; return ' '; });
-  return { text: out, removed };
+  const cards = new Set();
+  for (const [re, kind, keep] of RULES) out = out.replace(re, m => {
+    if (keep) { const r = keep(m); const c = r.match(/⟦C(\d{4})⟧/); if (c) cards.add(c[1]); if (kind === 'card' && m.replace(/\D/g, '').length > 4) removed++; return r; }
+    removed++; return ' ';
+  });
+  return { text: out, removed, cards: [...cards] };
 }
 
 /** For single fields (merchant name, note): drops long digit runs that could be card or account numbers. */
 export function cleanField(s, max = 80) {
-  return redactSensitive(String(s || '')).text.replace(/\s+/g, ' ').trim().slice(0, max);
+  return redactSensitive(String(s || '')).text.replace(/⟦C\d{4}⟧/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+/** Last 4 digits of the card mentioned in a text (file title, header), or ''. */
+export function cardOf(text) {
+  const c = redactSensitive(String(text || '')).text.match(/⟦C(\d{4})⟧/);
+  return c ? c[1] : '';
 }

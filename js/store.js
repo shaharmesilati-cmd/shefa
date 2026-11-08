@@ -38,7 +38,7 @@ export function normalizeSettings(d) {
 export function normalizeTx(t) {
   if (!t || !/^\d{4}-\d{2}-\d{2}$/.test(t.date)) return null;
   return {
-    id: str(t.id) || uid(), date: t.date, time: /^\d{2}:\d{2}$/.test(t.time || '') ? t.time : null, place: str(t.place, 40),
+    id: str(t.id) || uid(), date: t.date, time: /^\d{2}:\d{2}$/.test(t.time || '') ? t.time : null, place: str(t.place, 40), card: /^\d{4}$/.test(t.card || '') ? t.card : null,
     merchant: str(t.merchant) || 'ללא שם', amount: Math.round(num(t.amount) * 100) / 100,
     category: str(t.category, 40) || 'other', kind: ['expense', 'income', 'card-payment'].includes(t.kind) ? t.kind : 'expense',
     fixedId: t.fixedId ? str(t.fixedId) : null, installment: t.installment ? str(t.installment, 12) : null, foreign: !!t.foreign,
