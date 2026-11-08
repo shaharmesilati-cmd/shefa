@@ -1,5 +1,5 @@
 import * as vault from './vault.js';
-import { state, loadState, replaceAll, flushNow, bus, changed, persist } from './store.js';
+import { state, loadState, replaceAll, flushNow, bus, changed, persist, upsertTx } from './store.js';
 import { budgetKeyOf, isoOf, shiftKey, periodOf } from './calc.js';
 import { $, $$, esc, ic, toast, openSheet, monthName } from './util.js';
 import * as home from './views/home.js';
@@ -8,6 +8,7 @@ import * as add from './views/add.js';
 import * as budget from './views/budget.js';
 import * as more from './views/more.js';
 import { readShots } from './views/add.js';
+import { classify, historyOf, AUTO } from './categorize.js';
 
 const VIEWS = { home, expenses, add, budget, more };
 const MONTH_VIEWS = ['home', 'expenses', 'budget'];
@@ -118,6 +119,20 @@ async function startApp(firstRun) {
   show(firstRun ? 'budget' : (location.hash.slice(1) || 'home'));
   if (firstRun) toast('הכספת נוצרה. נתחיל מההכנסה וההוצאות הקבועות.');
   takeShared();
+  autoClassify();
+}
+
+/* Purchases still waiting in "other" get another try with everything learned so far. */
+function autoClassify() {
+  const ids = new Set(state.settings.categories.map(c => c.id));
+  const history = historyOf(state.tx);
+  const upd = [];
+  for (const t of state.tx) {
+    if (t.kind !== 'expense' || (t.category || 'other') !== 'other' || t.confirmed) continue;
+    const r = classify(t.merchant, { rules: state.settings.rules, ids, history });
+    if (r.conf >= AUTO) upd.push({ ...t, category: r.cat });
+  }
+  if (upd.length) { upsertTx(upd); changed(); toast(`${upd.length} קניות סווגו לבד לפי מה שלמדתי`); }
 }
 
 /* Screenshots shared to the app from the gallery wait in a temporary cache. Read them once, then delete. */

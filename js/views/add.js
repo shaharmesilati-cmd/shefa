@@ -8,7 +8,7 @@ import { markDuplicates } from '../dedupe.js';
 import { parsePayslip } from '../payslip.js';
 import { isoOf } from '../calc.js';
 import { cleanField, cardOf } from '../sanitize.js';
-import { guessCategory, looksLikeCardPayment, matchFixed } from '../categorize.js';
+import { classify, historyOf, AUTO, looksLikeCardPayment, matchFixed } from '../categorize.js';
 import { catOptions, kindOptions, openTxSheet } from './parts.js';
 
 let mode = null;          // null | 'paste' | 'review'
@@ -265,11 +265,14 @@ function toRow(x, source) {
   const merchant = cleanField(x.merchant) || 'ללא שם';
   if (kind === 'expense' && source === 'bank' && looksLikeCardPayment(merchant)) kind = 'card-payment';
   const fx = kind === 'expense' ? matchFixed(merchant, S.fixed) : null;
+  const cls = classify(merchant, { rules: S.rules, ids, history: HIST || (HIST = historyOf(state.tx)) });
   return { id: uid(), card: /^\d{4}$/.test(x.card || '') ? x.card : (review0card || null), date: x.date, time: x.time || null, merchant, place: x.place || placeOf(merchant), amount: x.amount, kind,
-    category: guessCategory(merchant, S.rules, ids), installment: x.installment || null, foreign: !!x.foreign,
+    category: cls.conf >= AUTO ? cls.cat : 'other', auto: cls.conf >= AUTO && cls.why !== 'rule' ? cls.why : null, installment: x.installment || null, foreign: !!x.foreign,
     note: cleanField(x.note, 120), fixedId: fx ? fx.id : null, on: true, dup: null, guessed: !!x.dateGuessed };
 }
+let HIST = null;
 function buildReview(groupsRaw, source) {
+  HIST = historyOf(state.tx);
   const groups = groupsRaw.map((g, gi) => g.map(x => ({ ...toRow(x, source), g: gi })));
   const rows = markDuplicates(groups, state.tx.filter(t => !t.ignored));
   rows.forEach(r => { if (r.dup) r.on = false; });
@@ -306,7 +309,7 @@ function renderReview(el) {
         <div class="rev-top"><b class="rev-name">${esc(r.merchant)}</b><b class="rev-amt">${money(r.amount, 'auto')}</b></div>
         <div class="rev-meta">${ic('calendar')}<span>${shortDate(r.date)}${r.time ? ' · ' + esc(r.time) : ''}</span>${r.place ? `<span>· ${esc(r.place)}</span>` : ''}${r.card ? `<span class="chip">${ic('card')}${esc(r.card)}</span>` : ''}
           ${r.dup ? `<span class="chip warn">${r.dup === 'saved' ? 'כבר שמורה' : 'בצילום אחר'}</span>` : ''}
-          ${r.fixedId ? `<span class="chip lilac">${ic('lock')}קבועה</span>` : ''}${r.installment ? `<span class="chip">תשלום ${esc(r.installment)}</span>` : ''}
+          ${r.fixedId ? `<span class="chip lilac">${ic('lock')}קבועה</span>` : ''}${r.kind === 'expense' && r.category === 'other' ? `<span class="chip warn">${ic('question')}בחר קטגוריה</span>` : r.auto ? `<span class="chip good">${ic('sparkle')}סווג לבד</span>` : ''}${r.installment ? `<span class="chip">תשלום ${esc(r.installment)}</span>` : ''}
           ${r.foreign ? `<span class="chip peach">מט"ח</span>` : ''}${r.guessed ? `<span class="chip warn">בדוק תאריך</span>` : ''}${r.amount < 0 ? `<span class="chip good">זיכוי</span>` : ''}</div>
         <div class="rev-cat" ${r.kind === 'expense' ? '' : 'hidden'}><select data-k="category" aria-label="קטגוריה">${catOptions(r.category)}</select></div>
         <details class="rev-edit"><summary>${ic('pencil')}תיקון</summary><div class="rev-f">

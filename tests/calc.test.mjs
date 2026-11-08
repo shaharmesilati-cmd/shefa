@@ -127,7 +127,7 @@ assert.equal(parsePayslip('סה"כ תשלומים 16,200.00\n101 לתשלום 12
 const iz = parseStatement('₪ 5 al 15:12\nQ\nאמריקן אקספרס זהב 4093\nעסקאות שאושרו וטרם נקלטו בארץ ובחו"ל. (?)\nטעינות - חבר של קבע 175.00\n06.11.26\nסה"כ עסקאות שטרם 10777 175.00\nעסקאות למועד חיוב קרוב\nטעינות "חבר" טעמים 70.00\n05.11.26\nטעינות "חבר" טעמים 77.00\n05.11.26\nסה"כ לחיוב החודש בכרטיס: 147.00\nחזרה למעלה 4“\nתנאים משפטיים:\nהנתונים נכונים לתאריך 08/11 ולא סופיים\n5 ₪ o> is', new Date(2026, 10, 8, 15));
 assert.deepEqual(iz.rows.map(r => [r.merchant, r.date, r.amount, r.card]), [
   ['טעינות - חבר של קבע', '2026-11-06', 175, '4093'], ['טעינות "חבר" טעמים', '2026-11-05', 70, '4093'], ['טעינות "חבר" טעמים', '2026-11-05', 77, '4093']]);
-assert.equal(guessCategory('טעינות "חבר" טעמים'), 'other'); assert.equal(guessCategory('טעינות - חבר של קבע'), 'other');
+assert.equal(guessCategory('טעינות "חבר" טעמים'), 'other');
 assert.equal(guessCategory('בר יין תל אביב'), 'fun'); assert.equal(guessCategory('מי אביבים'), 'home');
 console.log('v1.2 tests passed');
 // ---- v2: streak ----
@@ -150,6 +150,20 @@ console.log('v1.2 tests passed');
     const saved = [{ id: 's1', date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '4093' }];
     const again = markDuplicates([[{ date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '5512' }]], saved);
     assert.deepEqual([again[0].dup, again[0].dupOf], ['saved', 's1'], 'saved purchase with a wrong card is matched so its card can be fixed');
+  }
+  {
+    const { classify, sameBusiness, brandOf } = await import('../js/categorize.js');
+    const { normMerchant } = await import('../js/calc.js');
+    const ids = new Set(['super', 'food', 'shopping', 'fun', 'other']);
+    assert.equal(brandOf('טעינות - חבר של קבע'), 'חבר');
+    const rules = { [normMerchant('טעינות - חבר של קבע')]: 'shopping' };
+    assert.deepEqual([classify('טעינות "חבר" טעמים', { rules, ids }).cat, classify('טעינות "חבר" טעמים', { rules, ids }).why], ['shopping', 'similar'], 'same brand word -> same category');
+    assert.equal(classify('שופרסל דיל רמת גן', { ids }).cat, 'super');
+    assert.equal(classify('קפה גרג בע"מ', { ids }).cat, 'food');
+    assert.equal(classify('נגריית יוסי', { ids, history: [{ merchant: 'נגריית יוסי בעמ', category: 'fun', confirmed: true }] }).cat, 'fun', 'similar name in history');
+    assert.equal(classify('BIT העברה', { rules, ids }).conf, 0, 'payment apps are always asked');
+    assert.equal(classify('מספרת דנה', { ids }).cat, 'other', 'unknown -> ask');
+    assert.ok(sameBusiness('טעינות - חבר של קבע', 'טעינות "חבר" טעמים') && !sameBusiness('שופרסל', 'רמי לוי'));
   }
   console.log('v2 tests passed');
 }

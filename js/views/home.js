@@ -6,6 +6,7 @@ import { monthSummary, shiftKey, normMerchant } from '../calc.js';
 import { $, $$, esc, ic, money, fmt0, MONTHS, openSheet, toast, shortDate } from '../util.js';
 import { txRow, catIcon } from './parts.js';
 import { monthInsights, needsCategory, isGenericMerchant, budgetStreak } from '../insights.js';
+import { sameBusiness } from '../categorize.js';
 
 function greeting() {
   const h = new Date().getHours();
@@ -139,7 +140,7 @@ function classify(id, catId) {
   const t = state.tx.find(x => x.id === id); if (!t) return;
   const generic = isGenericMerchant(t.merchant);
   const n = normMerchant(t.merchant);
-  const list = generic ? [t] : state.tx.filter(x => x.kind === 'expense' && (x.id === t.id || (normMerchant(x.merchant) === n && (x.category || 'other') === 'other' && !x.confirmed)));
+  const list = generic ? [t] : state.tx.filter(x => x.kind === 'expense' && (x.id === t.id || ((x.category || 'other') === 'other' && !x.confirmed && sameBusiness(x.merchant, t.merchant))));
   if (!generic && catId !== 'other') { state.settings.rules[n] = catId; persist(); }
   upsertTx(list.map(x => ({ ...x, category: catId, confirmed: true })));
   changed();
