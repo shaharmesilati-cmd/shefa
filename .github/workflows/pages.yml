@@ -1,0 +1,68 @@
+# Builds and publishes Shefa to GitHub Pages.
+# The on-device screenshot reader (Tesseract) is downloaded here at build time, pinned to exact versions,
+# so the site itself never loads anything from another server.
+name: Publish site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test the budget math, parsing and privacy cleaning
+        run: node tests/calc.test.mjs
+
+      - name: Fetch the on-device screenshot reader (pinned versions)
+        run: |
+          mkdir -p /tmp/ocr && cd /tmp/ocr
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund --ignore-scripts \
+            tesseract.js@5.1.1 tesseract.js-core@5.1.1 \
+            @tesseract.js-data/heb@1.0.0 @tesseract.js-data/eng@1.0.0
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -r index.html manifest.webmanifest sw.js css js assets icons _site/
+          touch _site/.nojekyll
+          V=_site/vendor/tesseract
+          mkdir -p $V/core $V/lang
+          cp /tmp/ocr/node_modules/tesseract.js/dist/tesseract.min.js $V/
+          cp /tmp/ocr/node_modules/tesseract.js/dist/worker.min.js $V/
+          cp /tmp/ocr/node_modules/tesseract.js-core/tesseract-core*.js /tmp/ocr/node_modules/tesseract.js-core/tesseract-core*.wasm $V/core/
+          cp /tmp/ocr/node_modules/@tesseract.js-data/heb/4.0.0_best_int/heb.traineddata.gz $V/lang/
+          cp /tmp/ocr/node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz $V/lang/
+          cp /tmp/ocr/node_modules/tesseract.js/LICENSE.md $V/LICENSE-tesseract.js.md || true
+          echo "Files:" && find _site -type f | sort && du -sh _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

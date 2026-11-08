@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Nothing may load from, or be sent to, any other site. connect-src 'none' blocks every network request from the app's code. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+<meta name="referrer" content="no-referrer">
+<title>שפע</title>
+<meta name="description" content="ניהול תקציב חודשי פרטי ומוצפן - כמה נשאר להוציא, חיסכון, הוצאות קבועות ותקציב לקטגוריות.">
+<meta name="theme-color" content="#14967C" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D1614" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="שפע">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="lock" class="lock" hidden></div>
+
+<div id="app" hidden>
+  <div id="update-bar" class="update-bar" hidden>
+    <span>גרסה חדשה של שפע מוכנה.</span><button class="btn small" id="update-go" type="button">עדכון</button>
+  </div>
+  <header class="top">
+    <div class="brand"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#plant"></use></svg><span>שפע</span></div>
+    <div id="month-bar" class="month">
+      <button id="m-next" type="button" aria-label="החודש הבא"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#caret-right"></use></svg></button>
+      <span class="m-mid"><b id="m-label"></b><small id="m-range"></small></span>
+      <button id="m-prev" type="button" aria-label="החודש הקודם"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#caret-left"></use></svg></button>
+      <button id="m-today" class="m-today" type="button" hidden>להיום</button>
+    </div>
+    <button class="icon-btn" id="lock-now" type="button" aria-label="נעילה"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#lock"></use></svg></button>
+  </header>
+  <main class="wrap">
+    <section id="view-home" class="view"></section>
+    <section id="view-expenses" class="view" hidden></section>
+    <section id="view-add" class="view" hidden></section>
+    <section id="view-budget" class="view" hidden></section>
+    <section id="view-more" class="view" hidden></section>
+  </main>
+  <nav class="tabs" aria-label="ניווט ראשי">
+    <a href="#home" data-v="home"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#house"></use></svg><span>בית</span></a>
+    <a href="#expenses" data-v="expenses"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#receipt"></use></svg><span>תנועות</span></a>
+    <a href="#add" data-v="add" class="tab-add"><span class="plus"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#plus"></use></svg></span><span>הוספה</span></a>
+    <a href="#budget" data-v="budget"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#sliders"></use></svg><span>תקציב</span></a>
+    <a href="#more" data-v="more"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#gear"></use></svg><span>עוד</span></a>
+  </nav>
+</div>
+<div id="sheet-root"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<noscript><p style="padding:24px">שפע צריכה JavaScript כדי לעבוד.</p></noscript>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

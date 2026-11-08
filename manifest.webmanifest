@@ -1,0 +1,27 @@
+{
+  "name": "שפע - תקציב חודשי",
+  "short_name": "שפע",
+  "description": "ניהול תקציב חודשי פרטי ומוצפן: כמה נשאר להוציא, חיסכון, הוצאות קבועות ותקציב לקטגוריות.",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./#home",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F3F7F5",
+  "theme_color": "#14967C",
+  "categories": ["finance", "productivity"],
+  "share_target": {
+    "action": "./share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": { "files": [{ "name": "shots", "accept": ["image/*"] }] }
+  },
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
