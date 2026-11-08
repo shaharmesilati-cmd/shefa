@@ -12,7 +12,9 @@ try {
     out[n] = parseStatement(text, new Date(2026, 10, 8, 20));
   }
   const slip = await (await fetch('fixtures/sample-payslip.png')).blob();
-  out.payslip = parsePayslip(await readImage(slip), new Date(2026, 10, 8));
+  const slipText = await readImage(slip);
+  out.payslipText = slipText; // sample data only - helps diagnose a failure
+  out.payslip = parsePayslip(slipText, new Date(2026, 10, 8));
   await stopOcr();
 } catch (e) { out.error = String(e && e.message || e); }
 window.__done = out;

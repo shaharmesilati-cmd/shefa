@@ -26,6 +26,7 @@ const server = http.createServer((req, res) => {
     if (JSON.stringify(out[n]).match(/4580|5678/)) throw new Error(`${n}: full card number leaked`);
   }
   const p = out.payslip;
+  if (p.net !== 12345.67) console.log('payslip text:\n' + out.payslipText);
   if (p.net !== 12345.67 || p.gross !== 16200 || p.monthKey !== '2026-10') throw new Error('payslip: wrong numbers ' + JSON.stringify(p));
   if (JSON.stringify(p).match(/012345678|1234567/)) throw new Error('payslip: personal number leaked');
   console.log('OCR smoke test passed');
