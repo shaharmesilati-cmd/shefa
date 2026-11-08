@@ -123,4 +123,10 @@ assert.equal(MI.stats.biggest.amount, 500); assert.equal(MI.stats.topCat.id, 'su
 assert.deepEqual(needsCategory(S2, T2, '2026-11').map(t => t.merchant), ['BIT העברה']);
 assert.ok(isGenericMerchant('BIT העברה') && !isGenericMerchant('שופרסל'));
 assert.equal(parsePayslip('סה"כ תשלומים 16,200.00\n101 לתשלום 12,345.67').net, 12345.67, 'net found even when the word נטו is misread');
+// real Isracard card page layout: totals, section titles, buttons and footer are not purchases
+const iz = parseStatement('₪ 5 al 15:12\nQ\nאמריקן אקספרס זהב 4093\nעסקאות שאושרו וטרם נקלטו בארץ ובחו"ל. (?)\nטעינות - חבר של קבע 175.00\n06.11.26\nסה"כ עסקאות שטרם 10777 175.00\nעסקאות למועד חיוב קרוב\nטעינות "חבר" טעמים 70.00\n05.11.26\nטעינות "חבר" טעמים 77.00\n05.11.26\nסה"כ לחיוב החודש בכרטיס: 147.00\nחזרה למעלה 4“\nתנאים משפטיים:\nהנתונים נכונים לתאריך 08/11 ולא סופיים\n5 ₪ o> is', new Date(2026, 10, 8, 15));
+assert.deepEqual(iz.rows.map(r => [r.merchant, r.date, r.amount, r.card]), [
+  ['טעינות - חבר של קבע', '2026-11-06', 175, '4093'], ['טעינות "חבר" טעמים', '2026-11-05', 70, '4093'], ['טעינות "חבר" טעמים', '2026-11-05', 77, '4093']]);
+assert.equal(guessCategory('טעינות "חבר" טעמים'), 'other'); assert.equal(guessCategory('טעינות - חבר של קבע'), 'other');
+assert.equal(guessCategory('בר יין תל אביב'), 'fun'); assert.equal(guessCategory('מי אביבים'), 'home');
 console.log('v1.2 tests passed');

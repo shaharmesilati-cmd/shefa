@@ -11,6 +11,8 @@ try {
     const text = await readImage(blob);
     out[n] = parseStatement(text, new Date(2026, 10, 8, 20));
   }
+  const iz = await (await fetch('fixtures/sample-isracard-card.png')).blob();
+  out.cardPage = parseStatement(await readImage(iz), new Date(2026, 10, 8, 15));
   const slip = await (await fetch('fixtures/sample-payslip.png')).blob();
   const slipText = await readImage(slip);
   out.payslipText = slipText; // sample data only - helps diagnose a failure

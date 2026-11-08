@@ -12,7 +12,7 @@ const RULES = [
   [/[*•●xX]{2,}[ \-]?\d{4}(?!\d)/g, 'card', last4],
   [/[*•●xX]{2,}[ \-]?\d{1,3}(?!\d)/g, 'card'],
   // "card ending in 1234", "כרטיס 1234", "אשראי 1234" -> keep last 4
-  [/(כרטיס|אשראי|ויזה|visa|mastercard|מאסטרקארד|אמקס|amex|דיינרס|המסתיים ב|מסתיים ב|ending in|card)[^\n\d]{0,12}\d{4}(?!\d)/gi, 'card', last4],
+  [/(כרטיס|אשראי|ויזה|visa|mastercard|מאסטרקארד|מסטרקארד|אמקס|amex|אמריקן אקספרס|american express|דיינרס|diners|ישראכרט|isracard|לאומי קארד|כאל|מקס|זהב|פלטינום|platinum|gold|המסתיים ב|מסתיים ב|ending in|card)[^\n\d]{0,24}\d{4}(?!\d)/gi, 'card', last4],
   // expiry date next to its label
   [/(תוקף|תוקפו|valid|exp\.?|expiry|expires)[^\n\d]{0,8}\d{1,2}\s?[\/.\-]\s?\d{2,4}/gi, 'expiry'],
   // security code

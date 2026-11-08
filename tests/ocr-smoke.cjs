@@ -25,6 +25,9 @@ const server = http.createServer((req, res) => {
     if (!rows.every(r => r.card === '9012')) throw new Error(`${n}: card last-4 missing`);
     if (JSON.stringify(out[n]).match(/4580|5678/)) throw new Error(`${n}: full card number leaked`);
   }
+  // Isracard card page: section totals, titles, the "back to top" button and the legal footer must NOT become purchases
+  const cp = out.cardPage.rows.map(r => [r.amount, r.card]);
+  if (JSON.stringify(cp) !== JSON.stringify([[120, '1111'], [45.5, '1111'], [60, '1111']])) throw new Error('card page: wrong purchases ' + JSON.stringify(out.cardPage.rows));
   const p = out.payslip;
   if (p.net !== 12345.67) console.log('payslip text:\n' + out.payslipText);
   if (p.net !== 12345.67 || p.gross !== 16200 || p.monthKey !== '2026-10') throw new Error('payslip: wrong numbers ' + JSON.stringify(p));

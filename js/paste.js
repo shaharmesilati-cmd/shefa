@@ -11,8 +11,13 @@ const TIME = /(?<![\d.,])([01]?\d|2[0-3]):([0-5]\d)(?![\d.,])/;
 const SHEKEL = /-?₪\s?-?\d[\d,]*(?:\.\d{1,2})?|-?\d[\d,]*(?:\.\d{1,2})?\s?(?:₪|ש"ח|ש״ח)/;
 const PLAIN = /-?\d{1,3}(?:,\d{3})+(?:\.\d{2})?(?!\d)|-?\d+\.\d{2}(?!\d)/;
 const INST = /תשלום\s*(\d+)\s*(?:מתוך|מ)\s*(\d+)/;
-const WORDS = /[^֐-׿a-z]/gi;
-const hasWords = s => s.replace(WORDS, '').length >= 2;
+// A real name has at least 2 Hebrew letters or one Latin word of 3+ letters (status-bar noise like "al" or "o is" does not)
+const hasWords = s => (s.match(/[\u0590-\u05FF]/g) || []).length >= 2 || /[a-z]{3,}/i.test(s);
+// Summary lines carry a TOTAL, not a purchase: skip them together with their amount
+const TOTAL = /סה["״']?\s?כ|סך\s*הכל|סך\s*חיוב|לחיוב\s*החודש|יתרה|total/i;
+// Section titles, buttons and footers of the card app
+const HEADING = /^(עסקאות|חיובים|תנועות)(\s|$)|עסקאות\s+(שאושרו|למועד|בחו|בארץ|אחרונות)|חזרה למעלה|למועד חיוב|טרם נקלטו/;
+const STOP = /תנאים משפטיים|הנתונים נכונים|הנתונים לא כוללים/;
 
 const CITIES = ['תל אביב', 'ת"א', 'ירושלים', 'חיפה', 'ראשון לציון', 'ראשל"צ', 'פתח תקווה', 'פ"ת', 'אשדוד', 'נתניה', 'באר שבע', 'ב"ש', 'בני ברק', 'חולון', 'רמת גן', 'אשקלון', 'רחובות', 'בת ים', 'בית שמש', 'כפר סבא', 'הרצליה', 'חדרה', 'מודיעין', 'נצרת', 'לוד', 'רמלה', 'רעננה', 'הוד השרון', 'גבעתיים', 'קריית גת', 'קרית גת', 'נהריה', 'עפולה', 'אילת', 'קריית אתא', 'קרית אתא', 'קריית ביאליק', 'קרית ביאליק', 'קריית מוצקין', 'קרית מוצקין', 'קריית ים', 'קרית ים', 'קריית אונו', 'קרית אונו', 'קריית שמונה', 'קרית שמונה', 'יבנה', 'אור יהודה', 'נס ציונה', 'ראש העין', 'טבריה', 'צפת', 'דימונה', 'אופקים', 'שדרות', 'נתיבות', 'יהוד', 'גבעת שמואל', 'אריאל', 'מעלה אדומים', 'זכרון יעקב', 'כרמיאל', 'עכו', 'טירת כרמל', 'יקנעם', 'סביון', 'כפר יונה', 'אבן יהודה', 'שוהם', 'גדרה', 'קיסריה', 'פרדס חנה', 'רמת השרון', 'הרצליה פיתוח', 'מבשרת', 'אום אל פחם', 'רהט', 'טייבה', 'שפרעם', 'ערד', 'מצפה רמון', 'יוקנעם', 'קצרין', 'בית שאן', 'מגדל העמק', 'נוף הגליל', 'עתלית', 'tel aviv', 'jerusalem', 'haifa'];
 const CITY_RE = new RegExp(`(?:^|\\s|-)(${CITIES.map(c => c.replace(/[.*+?^${}()|[\]\\"]/g, m => '\\' + m)).join('|')})(?=$|\\s|-|,)`, 'i');
@@ -34,6 +39,8 @@ export function parseStatement(text, today = new Date()) {
   let seenContent = false;
   for (let line of safe.split(/\n+/)) {
     line = line.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').replace(/[|_~^«»]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (STOP.test(line)) break; // legal footer: nothing after it is a purchase
+    if (TOTAL.test(line)) continue;
     const cm = [...line.matchAll(/⟦C(\d{4})⟧/g)];
     if (cm.length) { tokens.push({ t: 'cardctx', v: cm[cm.length - 1][1] }); line = line.replace(/⟦C\d{4}⟧/g, ' ').trim(); }
     if (!line) continue;
@@ -48,8 +55,10 @@ export function parseStatement(text, today = new Date()) {
     for (const dm of rest.matchAll(DATE_G)) { const d = dateFrom(dm, today); if (d) { date = d; rest = rest.replace(dm[0], ' '); break; } }
     if (!a) { a = (rest.match(PLAIN) || [])[0] || null; if (a) rest = rest.replace(a, ' '); }
     const name = cleanName(rest);
-    const isName = hasWords(name) && !SKIP.test(name);
-    if (SKIP.test(line) && !a) continue;
+    const isName = hasWords(name) && !SKIP.test(name) && !HEADING.test(name);
+    if ((SKIP.test(line) || HEADING.test(name)) && !a) continue;
+    // an amount with no name before any purchase appeared is screen chrome (status bar "5G", battery), not a purchase
+    if (a && !isName && !seenContent) a = null;
     // a lone clock before any purchase is the phone's status bar - ignore it
     if (tm && !seenContent && !a && !date && !isName) continue;
     if (a || isName) tokens.push({ t: 'line' });
