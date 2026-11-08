@@ -293,6 +293,8 @@ function renderReview(el) {
         ${review.removed ? `<span class="chip lilac">${ic('shield')}${review.removed} פרטים רגישים נמחקו</span>` : ''}
         ${review.failed ? `<span class="chip">${review.failed} צילומים לא נקראו</span>` : ''}
       </div>
+      ${review.source !== 'bank' ? `<div class="card4"><span class="c4-ic">${ic('card')}</span><div class="field"><label for="rv-card">הכרטיס ששילם (4 ספרות אחרונות)</label>
+        <input id="rv-card" type="text" inputmode="numeric" maxlength="4" value="${esc(mainCard(R))}" placeholder="${mainCard(R) ? '' : 'לא זוהה - אפשר להקליד'}"></div></div>` : ''}
       ${review.source === 'screenshot' ? `<p class="hint">${ic('shield')} הצילומים כבר נמחקו מהזיכרון. בדוק שהשמות והסכומים נכונים - הקריאה מצילום לא תמיד מושלמת.</p>` : ''}
       ${fileBar}
       ${dups ? `<button class="link-btn left" id="rv-showdup" type="button">${review.showDup ? 'הסתר' : 'הצג'} את מה שסונן</button>` : ''}
@@ -319,6 +321,12 @@ function renderReview(el) {
     <div class="savebar"><span id="rv-sum"></span><button class="btn primary" id="rv-save" type="button">${ic('check')}שמירה</button></div>`;
   sum(el);
   $('#rv-cancel', el).onclick = () => { review = null; mode = null; render(el); };
+  const c4 = $('#rv-card', el);
+  if (c4) c4.addEventListener('change', () => {
+    const v = c4.value.replace(/\D/g, '');
+    if (v && v.length !== 4) { toast('רושמים בדיוק 4 ספרות'); return; }
+    R.forEach(r => (r.card = v || null)); renderReview(el); toast(v ? `כל העסקאות סומנו בכרטיס ${v}` : 'הכרטיס הוסר מהעסקאות');
+  });
   const sd = $('#rv-showdup', el); if (sd) sd.onclick = () => { review.showDup = !review.showDup; renderReview(el); };
   $('#rv-save', el).onclick = () => save(el);
   if ($('#rv-type', el)) $('#rv-type', el).onchange = e => { fileCtx.type = e.target.value; rebuildFromFile(el); };
@@ -336,6 +344,11 @@ function renderReview(el) {
       sum(el);
     }));
   });
+}
+/** The card most of the rows were read with (from the top of the screenshot or the file title). */
+function mainCard(rows) {
+  const n = {}; for (const r of rows) if (r.card) n[r.card] = (n[r.card] || 0) + 1;
+  return Object.entries(n).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
 }
 function mapSelects() {
   const h = fileCtx.mapping.header || [];

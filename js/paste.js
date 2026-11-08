@@ -21,6 +21,9 @@ const STOP = /תנאים משפטיים|הנתונים נכונים|הנתוני
 
 const CITIES = ['תל אביב', 'ת"א', 'ירושלים', 'חיפה', 'ראשון לציון', 'ראשל"צ', 'פתח תקווה', 'פ"ת', 'אשדוד', 'נתניה', 'באר שבע', 'ב"ש', 'בני ברק', 'חולון', 'רמת גן', 'אשקלון', 'רחובות', 'בת ים', 'בית שמש', 'כפר סבא', 'הרצליה', 'חדרה', 'מודיעין', 'נצרת', 'לוד', 'רמלה', 'רעננה', 'הוד השרון', 'גבעתיים', 'קריית גת', 'קרית גת', 'נהריה', 'עפולה', 'אילת', 'קריית אתא', 'קרית אתא', 'קריית ביאליק', 'קרית ביאליק', 'קריית מוצקין', 'קרית מוצקין', 'קריית ים', 'קרית ים', 'קריית אונו', 'קרית אונו', 'קריית שמונה', 'קרית שמונה', 'יבנה', 'אור יהודה', 'נס ציונה', 'ראש העין', 'טבריה', 'צפת', 'דימונה', 'אופקים', 'שדרות', 'נתיבות', 'יהוד', 'גבעת שמואל', 'אריאל', 'מעלה אדומים', 'זכרון יעקב', 'כרמיאל', 'עכו', 'טירת כרמל', 'יקנעם', 'סביון', 'כפר יונה', 'אבן יהודה', 'שוהם', 'גדרה', 'קיסריה', 'פרדס חנה', 'רמת השרון', 'הרצליה פיתוח', 'מבשרת', 'אום אל פחם', 'רהט', 'טייבה', 'שפרעם', 'ערד', 'מצפה רמון', 'יוקנעם', 'קצרין', 'בית שאן', 'מגדל העמק', 'נוף הגליל', 'עתלית', 'tel aviv', 'jerusalem', 'haifa'];
 const CITY_RE = new RegExp(`(?:^|\\s|-)(${CITIES.map(c => c.replace(/[.*+?^${}()|[\]\\"]/g, m => '\\' + m)).join('|')})(?=$|\\s|-|,)`, 'i');
+// "נובמבר 2026" or a lone "2026" at the top is a year, not a card
+const MONTH_WORD = /ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר|חודש|שנת/;
+const isYearLine = (line, n) => n >= 1990 && n <= 2099 && (MONTH_WORD.test(line) || /^\s*\d{4}\s*$/.test(line));
 export function placeOf(merchant) { const m = String(merchant || '').match(CITY_RE); return m ? m[1] : ''; }
 
 function dateFrom(m, today) {
@@ -36,11 +39,16 @@ const cleanName = s => s.replace(/₪|ש"ח|ש״ח|\bILS\b/g, ' ').replace(/[^֐
 export function parseStatement(text, today = new Date()) {
   const { text: safe, removed } = redactSensitive(text);
   const tokens = [];
-  let seenContent = false;
+  let seenContent = false, seenAmount = false;
   for (let line of safe.split(/\n+/)) {
     line = line.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').replace(/[|_~^«»]/g, ' ').replace(/\s+/g, ' ').trim();
     if (STOP.test(line)) break; // legal footer: nothing after it is a purchase
     if (TOTAL.test(line)) continue;
+    // top of the screen: a line that ends with 4 digits and has no other numbers is the card (e.g. "זהב 4093" or just "4093")
+    if (!seenAmount && !/⟦C/.test(line)) {
+      const m4 = line.match(/(?<![\d.,:\/₪-])(\d{4})\s*$/);
+      if (m4 && !/\d/.test(line.slice(0, m4.index)) && !SKIP.test(line) && !isYearLine(line, +m4[1])) { tokens.push({ t: 'cardctx', v: m4[1] }); continue; }
+    }
     const cm = [...line.matchAll(/⟦C(\d{4})⟧/g)];
     if (cm.length) { tokens.push({ t: 'cardctx', v: cm[cm.length - 1][1] }); line = line.replace(/⟦C\d{4}⟧/g, ' ').trim(); }
     if (!line) continue;
@@ -69,6 +77,7 @@ export function parseStatement(text, today = new Date()) {
     if (a) {
       const n = toAmount(a);
       if (n !== null && Math.abs(n) >= 0.5 && Math.abs(n) < 200000) {
+        seenAmount = true;
         tokens.push({ t: 'amount', v: Math.abs(n) * (/-/.test(a) || /זיכוי|החזר/.test(line) ? -1 : 1), fx: /\$|€|£|USD|EUR|GBP|דולר|יורו/.test(line) });
         seenContent = true;
       }

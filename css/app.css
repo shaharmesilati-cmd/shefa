@@ -484,3 +484,8 @@ body { background: #FFFFFF; }
   .top .icon-btn { width: 36px; }
 }
 @media (max-width: 350px) { .brand > span:not(.logo) { display: none; } }
+.card4 { display: flex; align-items: flex-end; gap: 10px; background: var(--surface-2); border-radius: 14px; padding: 10px 12px; }
+.card4 .field { flex: 1; }
+.card4 input { max-width: 160px; letter-spacing: .2em; font-weight: 700; direction: ltr; text-align: right; }
+.c4-ic { width: 40px; height: 46px; border-radius: 12px; display: grid; place-items: center; background: #FFFFFF; color: var(--primary); flex: none; }
+.c4-ic .ic { width: 1.4rem; height: 1.4rem; }

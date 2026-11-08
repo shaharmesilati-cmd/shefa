@@ -137,5 +137,10 @@ console.log('v1.2 tests passed');
   const T3 = [{ date: '2026-11-03', merchant: 'a', amount: 250, kind: 'expense' }, { date: '2026-11-05', merchant: 'b', amount: 80, kind: 'expense' }, { date: '2026-11-07', merchant: 'c', amount: 99, kind: 'expense' }];
   assert.equal(budgetStreak(S3, T3, new Date(2026, 10, 8)), 4, 'Nov 4-7 within 100/day, Nov 3 was over');
   assert.equal(budgetStreak(S3, [], new Date(2026, 10, 8)), 0);
+    const sep = parseStatement('15:12\nאמריקן אקספרס זהב\n4093\nעסקאות למועד חיוב קרוב\nסופר יודה 120.00\n06.11.26', new Date(2026, 10, 8, 15));
+  assert.deepEqual(sep.rows.map(r => r.card), ['4093'], 'card digits on their own line at the top');
+  const nick = parseStatement('הכרטיס של שחר 7781\nקפה 18.00\n06.11.26', new Date(2026, 10, 8, 15));
+  assert.deepEqual(nick.rows.map(r => [r.merchant, r.card]), [['קפה', '7781']], 'any card nickname ending in 4 digits');
+  assert.deepEqual(parseStatement('נובמבר 2026\nקפה 18.00\n06.11.26', new Date(2026, 10, 8, 15)).rows.map(r => r.card), [null], 'a month heading is not a card');
   console.log('v2 tests passed');
 }
