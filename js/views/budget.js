@@ -33,6 +33,7 @@ export function update(el, detail) {
 
 export function render(el) {
   const S = state.settings;
+  const SPENT = monthSummary(S, state.tx, state.ui.curKey);
   el.innerHTML = `
   <section class="card"><div class="card-h"><h2>${ic('hand-coins')} הכנסה</h2></div>
     <div class="row2">
@@ -61,17 +62,18 @@ export function render(el) {
         <button class="icon-btn del" data-del-g="${g.id}" aria-label="מחיקת היעד" type="button">${ic('trash')}</button></div>
       <div class="row2"><div class="field"><label for="g-m-${g.id}">הפרשה בחודש</label><input id="g-m-${g.id}" type="number" inputmode="decimal" data-g="${g.id}" data-k="monthly" value="${g.monthly || ''}"></div>
         <div class="field"><label for="g-s-${g.id}">נצבר עד היום</label><input id="g-s-${g.id}" type="number" inputmode="decimal" data-g="${g.id}" data-k="saved" value="${g.saved || ''}"></div></div>
-      <div class="bar"><i style="width:${p.toFixed(1)}%;--c:var(--sky)"></i></div>
+      <div class="gold-bar"><i style="width:${p.toFixed(1)}%"></i></div>
       <div class="goal-foot"><span class="muted">${Math.round(p)}% מהיעד${months ? ` · עוד כ-${months} חודשים` : ''}</span>
         <button class="btn small" data-dep="${g.id}" type="button" ${g.monthly ? '' : 'disabled'}>${ic('piggy')}הפקדתי ₪${fmt0(g.monthly)}</button></div></div>`; }).join('')}</div>
     <button class="btn small" id="g-add" type="button">${ic('target')}יעד חיסכון</button></section>
 
   <section class="card"><div class="card-h"><h2>${ic('sliders')} תקציב לקטגוריות</h2><button class="btn small primary" id="auto" type="button">${ic('sparkle')}חלוקה אוטומטית</button></div>
     <p class="hint">החלוקה האוטומטית מחלקת את הפנוי לפי יחס מקובל (סופר 30%, רכב 14%, אוכל בחוץ 10%...). אחר כך משנים כל סכום כרצונך.</p>
-    <div class="elist">${S.categories.map(c => `<div class="crow">${catIcon(c)}
-      <input type="text" id="c-n-${c.id}" data-c="${c.id}" data-k="name" value="${esc(c.name)}" aria-label="שם הקטגוריה">
+    <div class="elist">${S.categories.map(c => { const sp = SPENT.byCat[c.id] || 0; return `<div class="crow">${catIcon(c)}
+      <div class="crow-n"><input type="text" id="c-n-${c.id}" data-c="${c.id}" data-k="name" value="${esc(c.name)}" aria-label="שם הקטגוריה">
+        <small class="${c.budget && sp > c.budget ? 't-bad' : ''}">${sp ? `יצא החודש ${money(sp)}` : 'עוד לא יצא החודש'}</small></div>
       <input type="number" inputmode="decimal" id="c-b-${c.id}" data-c="${c.id}" data-k="budget" value="${c.budget || ''}" placeholder="0" aria-label="תקציב ל${esc(c.name)}">
-      ${c.id === 'other' ? '<span></span>' : `<button class="icon-btn del" data-del-c="${c.id}" aria-label="מחיקת ${esc(c.name)}" type="button">${ic('trash')}</button>`}</div>`).join('')}</div>
+      ${c.id === 'other' ? '<span></span>' : `<button class="icon-btn del" data-del-c="${c.id}" aria-label="מחיקת ${esc(c.name)}" type="button">${ic('trash')}</button>`}</div>`; }).join('')}</div>
     <details class="newcat"><summary>${ic('plus')} קטגוריה חדשה</summary>
       <div class="field"><label for="nc-n">שם</label><input id="nc-n" type="text" placeholder="למשל: חיות מחמד" maxlength="40"></div>
       <div class="icon-pick" role="radiogroup" aria-label="סמל">${CAT_ICONS.map((n, i) => `<button type="button" role="radio" aria-checked="${i === CAT_ICONS.length - 1}" data-ico="${n}" class="${i === CAT_ICONS.length - 1 ? 'on' : ''}" aria-label="${n}">${ic(n)}</button>`).join('')}</div>

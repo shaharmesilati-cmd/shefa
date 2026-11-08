@@ -222,7 +222,9 @@ async function readFile(el, file) {
     const { rows, mapping } = extractRows(sheets);
     if (!rows.length || !mapping) throw { code: 'empty' };
     fileCtx = { rows, mapping, type: mapping.type, name: file.name };
-    review0card = cardOf(file.name + '\n' + sheets.map(sh => sh.slice(0, 8).map(r => r.join(' ')).join('\n')).join('\n')) || null;
+    // the card number lives in the file name or the title rows ABOVE the table - never in the rows themselves (those hold amounts)
+    const titleRows = sheets.map(sh => { const out = []; for (const r of sh.slice(0, 12)) { const t = r.map(c => String(c ?? '')).join(' '); if (/תאריך|date/i.test(t)) break; out.push(t); } return out.join('\n'); }).join('\n');
+    review0card = mapping.type === 'bank' ? null : (cardOf(file.name + '\n' + titleRows) || null);
     buildReview([rowsToTx(rows, { type: fileCtx.type })], fileCtx.type === 'bank' ? 'bank' : 'card');
     review.file = true;
     mode = 'review'; render(el);

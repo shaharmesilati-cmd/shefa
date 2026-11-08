@@ -50,7 +50,7 @@ export function render(el) {
     <button class="btn danger" id="wipe-month" type="button">${ic('trash')}מחיקת התנועות של ${monthName(state.ui.curKey)}</button></section>
 
   <section class="card danger-zone"><div class="card-h"><h2>${ic('warning')} מחיקת כל הנתונים</h2></div>
-    <p class="hint">מוחק את הכספת מהמכשיר הזה. אי אפשר לבטל. כדאי לגבות קודם.</p>
+    <p class="hint">מוחק מהמכשיר הזה את כל התנועות, ההגדרות והקוד. אי אפשר לבטל, לכן כדאי לגבות קודם.</p>
     <button class="btn danger" id="wipe" type="button">${ic('trash')}מחיקת הכל</button></section>`;
 
   const inst = $('#inst', el);

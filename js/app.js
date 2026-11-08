@@ -36,7 +36,7 @@ function lockScreen(mode) {
         <label class="check"><input type="checkbox" id="lk-ok"> <span>הבנתי: אין שום דרך לשחזר קוד שנשכח. בלי הקוד הנתונים לא נפתחים, ולכן כדאי לגבות מדי פעם.</span></label>` : ''}
       <label class="check"><input type="checkbox" id="lk-rem" checked> <span>להישאר מחובר במכשיר הזה - בלי קוד בכל פתיחה (נעילת הטלפון שומרת עליו). אפשר לשנות במסך "עוד".</span></label>
       <div id="lk-err" class="form-err" role="alert" hidden></div>
-      <button class="btn primary wide" id="lk-go" type="submit">${setup ? ic('lock-key') + 'יצירת כספת והתחלה' : ic('lock') + 'פתיחה'}</button>
+      <button class="btn primary wide" id="lk-go" type="submit">${setup ? ic('lock-key') + 'בואו נתחיל' : ic('lock') + 'פתיחה'}</button>
       ${setup ? `<label class="btn wide" for="lk-file">${ic('upload')}יש לי קובץ גיבוי - שחזור</label><input id="lk-file" type="file" accept=".stash,.kis,.shefa,application/json" hidden>` : `<button class="link-btn" type="button" id="lk-forgot">שכחתי את הקוד</button>`}
     </form>
     <p class="lock-foot">${ic('shield')} בלי חשבון, בלי שרת. הנתונים לא יוצאים מהמכשיר.</p></div>`;
@@ -71,7 +71,7 @@ function lockScreen(mode) {
       if (p !== $('#lk-pass2').value) return showErr('שני הקודים לא זהים.');
       if (!$('#lk-ok').checked) return showErr('צריך לסמן שהבנת שאי אפשר לשחזר קוד.');
     }
-    go.disabled = true; go.innerHTML = `<span class="spin"></span>${setup ? 'יוצר כספת…' : 'פותח…'}`;
+    go.disabled = true; go.innerHTML = `<span class="spin"></span>${setup ? 'מכין…' : 'פותח…'}`;
     try {
       if (setup) {
         await vault.create(p);
@@ -86,7 +86,7 @@ function lockScreen(mode) {
       markSet();
       startApp(setup);
     } catch (x) {
-      go.disabled = false; go.innerHTML = setup ? ic('lock-key') + 'יצירת כספת והתחלה' : ic('lock') + 'פתיחה';
+      go.disabled = false; go.innerHTML = setup ? ic('lock-key') + 'בואו נתחיל' : ic('lock') + 'פתיחה';
       if (x && x.code === 'wrong') showErr(x.fails >= 5 ? 'קוד שגוי. בגלל כמה ניסיונות שגויים צריך לחכות לפני הניסיון הבא.' : 'הקוד שגוי. נסה שוב.');
       else if (x && x.code === 'wait') showErr(`יותר מדי ניסיונות שגויים. אפשר לנסות שוב בעוד ${x.seconds} שניות.`);
       else showErr('משהו לא עבד. ודא שהדפדפן לא במצב גלישה פרטית ונסה שוב.');
@@ -117,7 +117,7 @@ async function startApp(firstRun) {
   if (!session.remembered) startAutoLock();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
   show(firstRun ? 'budget' : (location.hash.slice(1) || 'home'));
-  if (firstRun) toast('הכספת נוצרה. נתחיל מההכנסה וההוצאות הקבועות.');
+  if (firstRun) toast('מוכן! נתחיל בכמה נכנס לך בחודש.');
   takeShared();
   autoClassify();
 }

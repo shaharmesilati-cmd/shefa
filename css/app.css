@@ -495,3 +495,6 @@ body { background: #FFFFFF; }
 .grp-h .field { width: 104px; flex: none; }
 .grp-h input { letter-spacing: .18em; font-weight: 700; direction: ltr; text-align: center; background: #FFFFFF; }
 .next.backup { background: var(--green-soft); } .next.backup .nx-ic { color: var(--green); }
+.crow-n { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.crow-n small { font-size: .74rem; color: var(--muted); padding-inline-start: 4px; }
+.crow { align-items: start; } .crow > .cat-ic, .crow > .icon-btn { margin-top: 4px; }
