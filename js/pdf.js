@@ -8,8 +8,8 @@ let lib = null, BASE = '';
 async function pdfjs() {
   if (lib) return lib;
   BASE = new URL('vendor/pdfjs/', location.href).href;
-  const m = await import(BASE + 'pdf.min.mjs');
-  m.GlobalWorkerOptions.workerSrc = BASE + 'pdf.worker.min.mjs';
+  const m = await import(BASE + 'pdf.min.js');
+  m.GlobalWorkerOptions.workerSrc = BASE + 'pdf.worker.min.js';
   lib = m;
   return lib;
 }

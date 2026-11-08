@@ -56,7 +56,8 @@ jobs:
           cp /tmp/ocr/node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz $V/lang/
           cp /tmp/ocr/node_modules/tesseract.js/LICENSE.md $V/LICENSE-tesseract.js.md || true
           P=_site/vendor/pdfjs && mkdir -p $P
-          cp /tmp/ocr/node_modules/pdfjs-dist/build/pdf.min.mjs /tmp/ocr/node_modules/pdfjs-dist/build/pdf.worker.min.mjs $P/
+          cp /tmp/ocr/node_modules/pdfjs-dist/build/pdf.min.mjs $P/pdf.min.js
+          cp /tmp/ocr/node_modules/pdfjs-dist/build/pdf.worker.min.mjs $P/pdf.worker.min.js
           cp -r /tmp/ocr/node_modules/pdfjs-dist/cmaps /tmp/ocr/node_modules/pdfjs-dist/standard_fonts $P/
           cp -r /tmp/ocr/node_modules/pdfjs-dist/wasm $P/ 2>/dev/null || true
           cp /tmp/ocr/node_modules/pdfjs-dist/LICENSE $P/LICENSE-pdfjs || true
