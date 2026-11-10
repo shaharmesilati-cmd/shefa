@@ -1,5 +1,5 @@
 import { state, upsertTx, persist, changed } from '../store.js';
-import { normMerchant, budgetKeyOf } from '../calc.js';
+import { normMerchant, budgetKeyOf, txKey } from '../calc.js';
 import { $, $$, esc, ic, money, num, uid, toast, shortDate } from '../util.js';
 import { readWorkbook, extractRows, rowsToTx } from '../importers.js';
 import { parseStatement, placeOf } from '../paste.js';
@@ -9,7 +9,7 @@ import { parsePayslip } from '../payslip.js';
 import { isoOf } from '../calc.js';
 import { cleanField, cardOf } from '../sanitize.js';
 import { classify, historyOf, AUTO, looksLikeCardPayment, matchFixed } from '../categorize.js';
-import { catOptions, kindOptions, openTxSheet } from './parts.js';
+import { catOptions, kindOptions, openTxSheet, wireNewCat } from './parts.js';
 
 let mode = null;          // null | 'paste' | 'review'
 let review = null;        // { rows, source, removed, file? }
@@ -42,9 +42,9 @@ export function render(el) {
       ${ic('caret-left', 'go')}</button>
     <label class="option" for="file-in">
       <span class="opt-ic" style="--c:#5B8DEF">${ic('file-xls')}</span>
-      <span class="opt-t"><b>קובץ מישראכרט או מהבנק</b><small>אקסל, CSV או PDF. הכי מדויק לחודש שלם: מורידים מהאתר או מהאפליקציה ובוחרים כאן.</small></span>
+      <span class="opt-t"><b>קובץ מישראכרט או מהבנק</b><small>אקסל, CSV או PDF. אפשר לבחור כמה קבצים יחד (למשל אחד לכל כרטיס). הכי מדויק לחודש שלם.</small></span>
       ${ic('caret-left', 'go')}
-      <input id="file-in" type="file" accept=".xlsx,.xls,.csv,.html,.pdf,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden>
+      <input id="file-in" type="file" multiple accept=".xlsx,.xls,.csv,.html,.pdf,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden>
     </label>
     <button class="option" id="opt-paste" type="button">
       <span class="opt-ic" style="--c:#9C7FE3">${ic('copy')}</span>
@@ -56,6 +56,14 @@ export function render(el) {
       ${ic('caret-left', 'go')}</button>
     <div id="add-status"></div>
     <p class="hint center">${ic('shield')} הכל נקרא בתוך הטלפון. מספרי כרטיס (מלבד 4 אחרונות), ת"ז ומספרי אישור נמחקים, והתמונה לא נשמרת.</p>
+    <details class="card help"><summary>${ic('file-xls')} איך מורידים את הקובץ מישראכרט או מהבנק?</summary>
+      <p class="hint">ישראכרט:</p>
+      <ol class="how"><li>נכנסים לאתר ישראכרט (בדפדפן, גם בטלפון) ומתחברים.</li>
+      <li>נכנסים ל"פירוט עסקאות" ובוחרים את הכרטיס ואת החודש.</li>
+      <li>גוללים לסוף הרשימה, מתחת לשורת "סה"כ לחיוב החודש בכרטיס". יש שם שני כפתורים: <b>הורדה ל-Excel</b> ו<b>הורדת קובץ PDF</b>. אקסל הכי מדויק, אבל גם PDF עובד.</li>
+      <li>חוזרים לכאן, לוחצים "קובץ מישראכרט או מהבנק" ובוחרים את הקובץ. באייפון הוא נמצא ב"קבצים" ← "הורדות". יש כמה כרטיסים? מורידים קובץ לכל אחד ובוחרים את כולם יחד.</li></ol>
+      <p class="hint">בנק: באתר הבנק נכנסים ל"עובר ושב" או "תנועות בחשבון", בוחרים טווח תאריכים ולוחצים על ייצוא לאקסל או הורדת PDF. החיוב החודשי של האשראי מהבנק לא נספר פעמיים.</p>
+      <p class="hint">${ic('shield')} הקובץ נקרא רק בטלפון. מספרי חשבון, ת"ז ומספרי כרטיס (מלבד 4 אחרונות) נמחקים, והקובץ עצמו לא נשמר.</p></details>
     <details class="card help"><summary>${ic('question')} טיפים לצילום טוב</summary>
       <ul class="how"><li>צלם את מסך רשימת העסקאות, כשהשמות והסכומים נראים בבירור.</li>
       <li>אפשר לגלול ולצלם כמה צילומים ברצף ולבחור את כולם יחד. עסקאות שמופיעות בשני צילומים יסומנו ככפילות.</li>
@@ -68,7 +76,7 @@ export function render(el) {
   drop.ondragleave = () => drop.classList.remove('over');
   drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); const f = [...e.dataTransfer.files].filter(x => IMG_TYPES.test(x.type)); if (f.length) readShots(f); };
   const fi = $('#file-in', el);
-  fi.onchange = () => { const file = fi.files[0]; fi.value = ''; if (file) readFile(el, file); };
+  fi.onchange = () => { const files = [...fi.files]; fi.value = ''; if (files.length === 1) readFile(el, files[0]); else if (files.length) readFiles(el, files); };
   $('#opt-paste', el).onclick = () => { mode = 'paste'; render(el); };
   $('#opt-slip', el).onclick = () => { mode = 'payslip'; render(el); };
   $('#opt-manual', el).onclick = () => openTxSheet(null);
@@ -232,12 +240,68 @@ async function readFile(el, file) {
     review.file = true;
     mode = 'review'; render(el);
   } catch (e) {
-    const msg = e && e.code === 'old-xls' ? 'זה קובץ Excel בפורמט ישן. פתח אותו ב-Excel ושמור בשם כ-xlsx, ואז נסה שוב.'
-      : e && e.code === 'empty' ? 'לא מצאתי בקובץ טבלת תנועות (עמודות של תאריך וסכום). ודא שזה קובץ פירוט העסקאות.'
-      : e && e.code === 'big' ? 'הקובץ גדול מדי. נסה קובץ של חודש או שניים.'
-      : 'לא הצלחתי לקרוא את הקובץ. נסה לשמור אותו מחדש כ-xlsx או CSV.';
+    const msg = fileError(e);
     st.innerHTML = `<div class="notice bad">${ic('warning')}<span>${esc(msg)}</span></div>`;
   }
+}
+
+function fileError(e) {
+  return e && e.code === 'old-xls' ? 'זה קובץ Excel בפורמט ישן. פתח אותו ב-Excel ושמור בשם כ-xlsx, ואז נסה שוב.'
+    : e && e.code === 'empty' ? 'לא מצאתי בקובץ טבלת תנועות (עמודות של תאריך וסכום). ודא שזה קובץ פירוט העסקאות.'
+    : e && e.code === 'big' ? 'הקובץ גדול מדי. נסה קובץ של חודש או שניים.'
+    : e && e.name === 'PasswordException' ? 'הקובץ נעול בסיסמה. שמור עותק בלי סיסמה ונסה שוב.'
+    : 'לא הצלחתי לקרוא את הקובץ. נסה לשמור אותו מחדש כ-xlsx או CSV.';
+}
+
+/* ---------------- several files at once ---------------- */
+/** Reads one Excel / CSV / PDF file into purchase rows, each row already carrying its card (bank files: none). */
+async function parseOneFile(file, onStatus) {
+  const pdf = /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
+  if (file.size > (pdf ? 25 : 15) * 1024 * 1024) throw { code: 'big' };
+  let rows, bank, removed = 0, pages = 0, scanned = 0, card = null;
+  if (pdf) {
+    const { readPdf } = await import('../pdf.js');
+    const r = await readPdf(file, onStatus);
+    const res = parseStatement(r.text, new Date()); r.text = '';
+    rows = res.rows; bank = r.bank; removed = res.removed; pages = r.pages; scanned = r.scanned;
+  } else {
+    const sheets = await readWorkbook(file);
+    const ex = extractRows(sheets);
+    if (!ex.rows.length || !ex.mapping) throw { code: 'empty' };
+    bank = ex.mapping.type === 'bank';
+    const titleRows = sheets.map(sh => { const out = []; for (const r of sh.slice(0, 12)) { const t = r.map(c => String(c ?? '')).join(' '); if (/תאריך|date/i.test(t)) break; out.push(t); } return out.join('\n'); }).join('\n');
+    card = bank ? null : (cardOf(file.name + '\n' + titleRows) || null);
+    rows = rowsToTx(ex.rows, { type: ex.mapping.type });
+  }
+  for (const x of rows) {
+    x.card = bank ? null : (x.card || card || cardOf(file.name) || null);
+    // the bank's monthly charge of the credit card is not counted (the purchases themselves are)
+    if (bank && (x.kind || 'expense') === 'expense' && looksLikeCardPayment(cleanField(x.merchant))) x.kind = 'card-payment';
+  }
+  return { rows, removed, pages, scanned };
+}
+async function readFiles(el, files) {
+  const list = files.slice(0, 12), n = list.length;
+  busy = { ctl: { stop: false } };
+  el.innerHTML = `<section class="card reading"><div class="read-ic">${ic('file-xls')}</div><h2>קורא ${n} קבצים…</h2>
+    <p class="muted" id="rd-sub">זה קורה בתוך הטלפון. הקבצים לא נשלחים לשום מקום.</p><div class="progress"><i id="rd-bar" style="width:3%"></i></div></section>`;
+  const set = (msg, p) => { const s = $('#rd-sub', el); if (s && msg) s.textContent = msg; const b = $('#rd-bar', el); if (b && p != null) b.style.width = `${Math.max(3, p * 100).toFixed(0)}%`; };
+  const groups = [], failed = []; let removed = 0, pages = 0, scanned = 0;
+  for (let i = 0; i < n; i++) {
+    set(`קורא קובץ ${i + 1} מתוך ${n}…`, i / n);
+    try {
+      const r = await parseOneFile(list[i], (msg, p) => set(msg ? `קובץ ${i + 1} מתוך ${n}: ${msg}` : null, (i + (p || 0)) / n));
+      if (r.rows.length) groups.push(r.rows); else failed.push(list[i].name);
+      removed += r.removed; pages += r.pages; scanned += r.scanned;
+    } catch (e) { console.error('file', e && (e.message || e)); failed.push(`${list[i].name} - ${fileError(e)}`); }
+  }
+  busy = null; files.length = 0;
+  if (!groups.length) { mode = null; render(el); $('#add-status', el).innerHTML = `<div class="notice bad">${ic('warning')}<span>לא מצאתי עסקאות באף אחד מהקבצים.</span></div>`; return; }
+  review0card = null; fileCtx = null;
+  buildReview(groups, 'file');
+  review.removed = removed; review.failedFiles = failed; review.files = groups.length;
+  if (pages) review.pdf = { pages, scanned };
+  mode = 'review'; render(el);
 }
 
 /* ---------------- PDF ---------------- */
@@ -291,10 +355,10 @@ function toRow(x, source) {
   const merchant = cleanField(x.merchant) || 'ללא שם';
   if (kind === 'expense' && source === 'bank' && looksLikeCardPayment(merchant)) kind = 'card-payment';
   const fx = kind === 'expense' ? matchFixed(merchant, S.fixed) : null;
-  const cls = isPlaceholder(merchant) ? { cat: 'other', conf: 0, why: 'pending' } : classify(merchant, { rules: S.rules, ids, history: HIST || (HIST = historyOf(state.tx)) });
+  const cls = isPlaceholder(merchant) ? { cat: 'other', conf: 0, why: 'pending' } : classify(merchant, { rules: S.rules, ids, cats: S.categories, history: HIST || (HIST = historyOf(state.tx)) });
   return { id: uid(), card: /^\d{4}$/.test(x.card || '') ? x.card : (review0card || null), date: x.date, time: x.time || null, merchant, place: x.place || placeOf(merchant), amount: x.amount, kind,
     category: cls.conf >= AUTO ? cls.cat : 'other', auto: cls.conf >= AUTO && cls.why !== 'rule' ? cls.why : null, installment: x.installment || null, foreign: !!x.foreign,
-    note: cleanField(x.note, 120), fixedId: fx ? fx.id : null, on: true, dup: null, guessed: !!x.dateGuessed, dateGuessed: !!x.dateGuessed, origDate: x.date, pending: isPlaceholder(merchant) };
+    note: cleanField(x.note, 120), fixedId: fx ? fx.id : null, on: true, dup: null, guessed: !!x.dateGuessed, dateGuessed: !!x.dateGuessed, origDate: x.date, chargeDate: x.chargeDate || null, pending: isPlaceholder(merchant) };
 }
 let HIST = null;
 function buildReview(groupsRaw, source) {
@@ -337,6 +401,7 @@ function renderReview(el) {
         ${review.failed ? `<span class="chip">${review.failed} צילומים לא נקראו</span>` : ''}
       </div>
       ${review.cardFixes ? `<p class="hint">${ic('refresh')} ${review.cardFixes} עסקאות שכבר שמורות יתעדכנו לפי הצילום (כרטיס, תאריך שלא נקרא קודם, או שם העסק במקום "טרם נקלט").</p>` : ''}
+      ${review.failedFiles && review.failedFiles.length ? `<div class="notice bad">${ic('warning')}<span>לא נקראו: ${review.failedFiles.map(esc).join(' · ')}</span></div>` : ''}
       ${review.pdf ? `<p class="hint">${ic('info')} נקראו ${review.pdf.pages} עמודים${review.pdf.scanned ? ` (${review.pdf.scanned} סרוקים - בדוק את הסכומים)` : ''}. הקובץ עצמו לא נשמר.</p>` : ''}
       ${review.source === 'screenshot' ? `<p class="hint">${ic('shield')} הצילומים כבר נמחקו מהזיכרון. בדוק שהשמות והסכומים נכונים - הקריאה מצילום לא תמיד מושלמת.</p>` : ''}
       ${fileBar}
@@ -376,6 +441,7 @@ function renderReview(el) {
   $$('.map-grid select', el).forEach(s => s.onchange = () => { fileCtx.override = fileCtx.override || {}; fileCtx.override[s.dataset.col] = +s.value; rebuildFromFile(el); });
   $$('.rev-row', el).forEach(row => {
     const r = R[+row.dataset.i];
+    const cs = row.querySelector('select[data-k="category"]'); if (cs) wireNewCat(cs);
     row.querySelectorAll('[data-k]').forEach(inp => inp.addEventListener(inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input', () => {
       const k = inp.dataset.k;
       if (k === 'on') { r.on = inp.checked; row.classList.toggle('off', !r.on); }
@@ -393,7 +459,7 @@ function groupHead(R, i) {
   if (review.source === 'bank') return '';
   const r = R[i]; if (i > 0 && R[i - 1].g === r.g) return '';
   const rows = R.filter(x => x.g === r.g), card = mainCard(rows), shown = rows.filter(x => !x.dup || review.showDup).length;
-  return `<div class="grp-h"><span class="c4-ic">${ic('card')}</span><div class="grp-t"><b>${review.groups > 1 ? `צילום ${r.g + 1}` : 'הכרטיס ששילם'}</b><small>${shown} עסקאות${rows.length > shown ? ` · ${rows.length - shown} כבר שמורות` : ''}</small></div>
+  return `<div class="grp-h"><span class="c4-ic">${ic('card')}</span><div class="grp-t"><b>${review.groups > 1 ? `${review.files ? 'קובץ' : 'צילום'} ${r.g + 1}` : 'הכרטיס ששילם'}</b><small>${shown} עסקאות${rows.length > shown ? ` · ${rows.length - shown} כבר שמורות` : ''}</small></div>
     <div class="field"><label for="g-card-${r.g}">4 ספרות</label><input id="g-card-${r.g}" data-gcard="${r.g}" type="text" inputmode="numeric" maxlength="4" value="${esc(card)}" placeholder="${card ? '' : '----'}"></div></div>`;
 }
 /** The card most of the rows were read with (from the top of the screenshot or the file title). */
@@ -428,12 +494,12 @@ function save(el) {
   let learned = false;
   for (const r of chosen) if (r.touched && r.kind === 'expense' && r.category !== 'refund') { state.settings.rules[normMerchant(r.merchant)] = r.category; learned = true; }
   if (learned) persist();
-  upsertTx(chosen.map((r, i) => ({ id: r.id, date: r.date, dateGuessed: r.dateGuessed && r.date === r.origDate ? true : undefined, time: /^\d{2}:\d{2}$/.test(r.time || '') ? r.time : null, merchant: cleanField(r.merchant), place: cleanField(r.place, 40),
+  upsertTx(chosen.map((r, i) => ({ id: r.id, date: r.date, chargeDate: r.chargeDate || undefined, dateGuessed: r.dateGuessed && r.date === r.origDate ? true : undefined, time: /^\d{2}:\d{2}$/.test(r.time || '') ? r.time : null, merchant: cleanField(r.merchant), place: cleanField(r.place, 40),
     card: /^\d{4}$/.test(r.card || '') ? r.card : null, amount: num(r.amount), kind: r.kind, category: r.category, fixedId: r.kind === 'expense' ? r.fixedId : null, installment: r.installment,
     foreign: r.foreign, note: r.note, source: review.source, added: now + i })));
   const fix = review.rows.filter(r => r.dup === 'saved').map(savedFix).filter(Boolean);
   if (fix.length) upsertTx(fix);
-  const keys = [...new Set(chosen.map(r => budgetKeyOf(r.date, state.settings.startDay)))].sort();
+  const keys = [...new Set(chosen.map(r => txKey({ ...r, source: review.source }, state.settings)))].sort();
   if (keys.length && !keys.includes(state.ui.curKey)) state.ui.curKey = keys[keys.length - 1];
   review = null; mode = null; fileCtx = null;
   toast(`נשמרו ${chosen.length} תנועות${fix.length ? ` · ${fix.length} קיימות עודכנו` : ''}`);

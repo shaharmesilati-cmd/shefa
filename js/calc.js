@@ -28,6 +28,14 @@ export function savingsAmount(settings, income) {
 /** "כסף שחזר": a purchase whose money came back (a return, a refund). It stays in the list but is not counted as spent. */
 export const REFUND = 'refund';
 export const isRefund = t => t.category === REFUND && t.kind !== 'income' && t.kind !== 'card-payment';
+/** A credit-card purchase (it is paid on next month's charge day). */
+export const isCardTx = t => t.kind === 'expense' && (/^\d{4}$/.test(t.card || '') || ['shots', 'card', 'pdf', 'paste'].includes(t.source));
+/** The budget month a transaction counts in. With "byCharge", card purchases count when the card is charged. */
+export function txKey(t, settings = {}) {
+  const sd = settings.startDay || 1;
+  if (settings.byCharge && isCardTx(t)) return t.chargeDate ? budgetKeyOf(t.chargeDate, sd) : shiftKey(budgetKeyOf(t.date, sd), 1);
+  return budgetKeyOf(t.date, sd);
+}
 export const isCounted = t => !t.ignored && t.kind !== 'income' && t.kind !== 'card-payment' && t.category !== REFUND;
 const sum = (list, f = t => t.amount) => list.reduce((a, t) => a + (Number(f(t)) || 0), 0);
 
@@ -38,7 +46,7 @@ const sum = (list, f = t => t.amount) => list.reduce((a, t) => a + (Number(f(t))
  */
 export function monthSummary(settings, allTx, key, today = new Date()) {
   const sd = settings.startDay || 1;
-  const inPeriod = allTx.filter(t => t.date && budgetKeyOf(t.date, sd) === key);
+  const inPeriod = allTx.filter(t => t.date && txKey(t, settings) === key);
   const counted = inPeriod.filter(isCounted);
   const variable = counted.filter(t => !t.fixedId);
   const actualIncome = sum(inPeriod.filter(t => t.kind === 'income' && !t.ignored));

@@ -1,7 +1,7 @@
 // Home: one calm screen. The big number is what you can safely spend today.
 // Below it: ONE next step, the savings goal with your streak, top categories, last purchases.
 // Everything else (charts, comparisons) lives behind "ניתוח החודש".
-import { state, catById, upsertTx, persist, changed } from '../store.js';
+import { state, catById, upsertTx, persist, changed, addCategory } from '../store.js';
 import { monthSummary, shiftKey, normMerchant } from '../calc.js';
 import { $, $$, esc, ic, money, fmt0, MONTHS, openSheet, toast, shortDate } from '../util.js';
 import { txRow, catIcon } from './parts.js';
@@ -122,7 +122,7 @@ function nextStep(S, C, key) {
     return `<section class="card next ask" data-ib="${esc(t.id)}">
       <div class="nx-h"><span class="nx-ic">${ic('sparkle')}</span><b>לאן זה שייך?</b><span class="nx-count">${pend.length > 1 ? `1 מתוך ${pend.length}` : ''}</span></div>
       <div class="ib-top"><b>${esc(t.merchant)}</b><b>${money(t.amount, 'auto')}</b></div>
-      <div class="ib-meta">${shortDate(t.date)}${t.time ? ' · ' + esc(t.time) : ''}${t.place ? ' · ' + esc(t.place) : ''}</div>
+      <div class="ib-meta">${shortDate(t.date)}${t.time ? ' · ' + esc(t.time) : ''}${t.place ? ' · ' + esc(t.place) : ''} · <a href="https://www.google.com/search?q=${encodeURIComponent(t.merchant)}" target="_blank" rel="noopener noreferrer">מה זה?</a></div>
       <div class="chips">${quick.map(c => `<button type="button" class="qchip" data-cat="${esc(c.id)}" style="--c:${c.color}">${ic(c.icon)}${esc(c.name)}</button>`).join('')}
         <button type="button" class="qchip more" data-more="1">${ic('dots')}כל הקטגוריות</button><button type="button" class="qchip keep" data-keep="1">דלג</button></div></section>`;
   }
@@ -163,8 +163,13 @@ function wire(el, cats) {
     ask.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => classify(id, b.dataset.cat));
     ask.querySelector('[data-keep]').onclick = () => classify(id, 'other', true);
     ask.querySelector('[data-more]').onclick = () => {
-      openSheet('בחירת קטגוריה', `<div class="chips big">${state.settings.categories.map(c => `<button type="button" class="qchip" data-c="${esc(c.id)}" style="--c:${c.color}">${ic(c.icon)}${esc(c.name)}</button>`).join('')}</div>`, (sh, close) => {
+      openSheet('בחירת קטגוריה', `<div class="chips big">${state.settings.categories.map(c => `<button type="button" class="qchip" data-c="${esc(c.id)}" style="--c:${c.color}">${ic(c.icon)}${esc(c.name)}</button>`).join('')}<button type="button" class="qchip new" data-new style="--c:#3D7BFA">${ic('plus')}קטגוריה חדשה</button></div>
+        <div class="nc-inline" hidden><input type="text" maxlength="40" placeholder="שם הקטגוריה, למשל: כרטיס נטען" aria-label="שם הקטגוריה החדשה"><button class="btn small primary" type="button" data-nc-ok>הוספה וסיווג</button></div>`, (sh, close) => {
         sh.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { close(); classify(id, b.dataset.c); });
+        const box = sh.querySelector('.nc-inline'), inp = box.querySelector('input');
+        sh.querySelector('[data-new]').onclick = () => { box.hidden = false; inp.focus(); };
+        const add = () => { const nid = addCategory(inp.value); if (!nid) { inp.focus(); return; } close(); classify(id, nid); };
+        box.querySelector('[data-nc-ok]').onclick = add; inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
       });
     };
   }

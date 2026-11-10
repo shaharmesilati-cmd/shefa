@@ -1,4 +1,4 @@
-import { state, catById, upsertTx, removeTx, persist, changed } from '../store.js';
+import { state, catById, upsertTx, removeTx, persist, changed, addCategory } from '../store.js';
 import { $, esc, ic, money, num, uid, shortDate, openSheet, toast, armConfirm } from '../util.js';
 import { isoOf, normMerchant } from '../calc.js';
 import { cleanField } from '../sanitize.js';
@@ -24,7 +24,26 @@ export function txRow(t) {
   </button>`;
 }
 
-export const catOptions = sel => state.settings.categories.map(c => `<option value="${esc(c.id)}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+export const catOptions = sel => state.settings.categories.map(c => `<option value="${esc(c.id)}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')
+  + '<option value="__new">+ קטגוריה חדשה…</option>';
+/** Picking "+ קטגוריה חדשה" in a category list opens a small name field right under it. Call before other change handlers. */
+export function wireNewCat(select) {
+  let prev = select.value;
+  select.addEventListener('change', e => {
+    if (select.value !== '__new') { prev = select.value; return; }
+    e.stopImmediatePropagation();
+    select.value = prev;
+    if (select.parentNode.querySelector('.nc-inline')) return;
+    const box = document.createElement('div'); box.className = 'nc-inline';
+    box.innerHTML = `<input type="text" maxlength="40" placeholder="שם הקטגוריה" aria-label="שם הקטגוריה החדשה"><button class="btn small primary" type="button">הוספה</button><button class="btn small ghost" type="button">ביטול</button>`;
+    select.after(box);
+    const [inp, ok, cancel] = box.children;
+    const done = () => { const id = addCategory(inp.value); if (!id) { inp.focus(); return; } box.remove(); select.innerHTML = catOptions(id); select.value = id; prev = id; select.dispatchEvent(new Event('change')); toast('הקטגוריה נוספה'); };
+    ok.onclick = done; cancel.onclick = () => box.remove();
+    inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); done(); } };
+    inp.focus();
+  });
+}
 export const fixedOptions = sel => `<option value="">לא, הוצאה רגילה</option>` + state.settings.fixed.map(f => `<option value="${esc(f.id)}" ${f.id === sel ? 'selected' : ''}>כן: ${esc(f.name || 'ללא שם')}</option>`).join('');
 export const kindOptions = sel => [['expense', 'הוצאה'], ['income', 'הכנסה'], ['card-payment', 'תשלום חשבון אשראי (לא נספר)']]
   .map(([v, l]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${l}</option>`).join('');
@@ -43,13 +62,15 @@ export function openTxSheet(t) {
     <div class="field" id="sh-cw"><label for="sh-c">קטגוריה</label><select id="sh-c">${catOptions(catById(t.category).id)}</select></div>
     ${state.settings.fixed.length ? `<div class="field" id="sh-fw"><label for="sh-f">זו הוצאה קבועה שכבר בתקציב?</label><select id="sh-f">${fixedOptions(t.fixedId)}</select></div>` : ''}
     <p class="hint">${ic('sparkle')} קטגוריה שתבחר לבית עסק נשמרת, ותשויך אוטומטית בפעם הבאה.</p>
-    ${isNew ? '' : `<a class="map-link" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((t.merchant + ' ' + (t.place || '')).trim())}" target="_blank" rel="noopener noreferrer">${ic('search')}איפה זה? חיפוש בגוגל מפות <small>(נשלח רק שם העסק)</small></a>`}
+    ${isNew ? '' : `<a class="map-link" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((t.merchant + ' ' + (t.place || '')).trim())}" target="_blank" rel="noopener noreferrer">${ic('search')}איפה זה? חיפוש בגוגל מפות <small>(נשלח רק שם העסק)</small></a>
+      <a class="map-link" href="https://www.google.com/search?q=${encodeURIComponent(t.merchant)}" target="_blank" rel="noopener noreferrer">${ic('question')}מה זה בכלל? חיפוש בגוגל <small>(נשלח רק שם העסק)</small></a>`}
     <div class="row2">${isNew ? '' : `<button class="btn danger" id="sh-del" type="button">${ic('trash')}מחיקה</button>`}
       <button class="btn primary" id="sh-ok" type="button">${ic('check')}שמירה</button></div>`, (sh, close) => {
     const sync = () => { const k = $('#sh-k', sh).value; $('#sh-cw', sh).hidden = k !== 'expense'; const fw = $('#sh-fw', sh); if (fw) fw.hidden = k !== 'expense'; };
     $('#sh-k', sh).onchange = sync; sync();
+    wireNewCat($('#sh-c', sh));
     if (isNew) $('#sh-m', sh).addEventListener('change', () => {
-      const S = state.settings, r = classify($('#sh-m', sh).value, { rules: S.rules, ids: new Set(S.categories.map(c => c.id)), history: historyOf(state.tx) });
+      const S = state.settings, r = classify($('#sh-m', sh).value, { rules: S.rules, ids: new Set(S.categories.map(c => c.id)), cats: S.categories, history: historyOf(state.tx) });
       if (r.conf >= AUTO) $('#sh-c', sh).value = r.cat;
     });
     if (!isNew) armConfirm($('#sh-del', sh), () => { removeTx(t.id); close(); changed(); toast('נמחק'); }, 'לחץ שוב למחיקה');

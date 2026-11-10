@@ -1,16 +1,51 @@
 import * as vault from '../vault.js';
 import { state, persist, replaceAll, flushNow, changed } from '../store.js';
 import { $, esc, ic, toast, openSheet, download, armConfirm, monthName } from '../util.js';
-import { budgetKeyOf } from '../calc.js';
+import { budgetKeyOf, normMerchant, txKey } from '../calc.js';
+import { catById } from '../store.js';
 import { install, lockNow, session, startAutoLock, stopAutoLock } from '../app.js';
 
-const VERSION = '2.8.0';
+const VERSION = '2.9.0';
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
 export function update(el, detail) { if (detail === 'install' || !el.contains(document.activeElement)) render(el); }
 
-const monthsWithData = () => [...new Set(state.tx.map(t => budgetKeyOf(t.date, state.settings.startDay)))].sort().reverse();
+const monthsWithData = () => [...new Set(state.tx.map(t => txKey(t, state.settings)))].sort().reverse();
+
+/** "What Stashwise learned": every shop -> category it remembers, with fix and delete. */
+function ruleRows() {
+  const S = state.settings, names = {};
+  for (const t of state.tx) { const k = normMerchant(t.merchant); if (!names[k] || t.added > names[k].added) names[k] = t; }
+  return Object.entries(S.rules).map(([k, cat]) => ({ k, cat, name: names[k] ? names[k].merchant : k, count: state.tx.filter(t => normMerchant(t.merchant) === k).length }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'he'));
+}
+function rulesCard() {
+  const rows = ruleRows(), cats = state.settings.categories.filter(c => c.id !== 'refund');
+  return `<details class="card rules"><summary><h2>${ic('sparkle')} מה Stashwise למדה <span class="muted num">(${rows.length})</span></h2></summary>
+    <p class="hint">כשאתה מסווג חנות, Stashwise זוכרת את זה לפעם הבאה. אם משהו נלמד לא נכון, תקן כאן. שינוי מעביר גם את הקניות הקיימות מהחנות הזו לקטגוריה החדשה.</p>
+    ${rows.length ? `<input type="search" id="rl-q" placeholder="חיפוש חנות" aria-label="חיפוש חנות">
+    <div class="rl-list">${rows.map(r => `<div class="rl-row" data-k="${esc(r.k)}"><div class="rl-n"><b>${esc(r.name)}</b><small class="muted">${r.count ? `${r.count} קניות` : 'אין קניות שמורות'}</small></div>
+      <select data-rl="${esc(r.k)}" aria-label="קטגוריה ל${esc(r.name)}">${cats.map(c => `<option value="${esc(c.id)}" ${c.id === catById(r.cat).id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+      <button class="icon-btn del" data-rl-del="${esc(r.k)}" type="button" aria-label="לשכוח את ${esc(r.name)}">${ic('trash')}</button></div>`).join('')}</div>`
+    : '<p class="muted">עוד לא נלמד כלום. ברגע שתסווג קנייה, היא תופיע כאן.</p>'}</details>`;
+}
+function wireRules(el) {
+  const S = state.settings;
+  const q = $('#rl-q', el); if (q) q.oninput = () => { const v = normMerchant(q.value); el.querySelectorAll('.rl-row').forEach(r => { r.hidden = !!v && !r.dataset.k.includes(v) && !r.textContent.toLowerCase().includes(q.value.trim().toLowerCase()); }); };
+  el.querySelectorAll('[data-rl]').forEach(s => s.onchange = () => {
+    const k = s.dataset.rl, old = S.rules[k], to = s.value;
+    S.rules[k] = to;
+    let n = 0;
+    for (const t of state.tx) if (t.kind === 'expense' && normMerchant(t.merchant) === k && t.category !== 'refund' && (t.category === old || !t.category || t.category === 'other')) { t.category = to; n++; }
+    persist(); changed('tx');
+    toast(`מעכשיו: ${catById(to).name}${n ? ` · ${n} קניות עודכנו` : ''}`);
+  });
+  el.querySelectorAll('[data-rl-del]').forEach(b => armConfirm(b, () => {
+    delete S.rules[b.dataset.rlDel]; persist(); b.closest('.rl-row').remove();
+    toast('נשכח. בפעם הבאה Stashwise תשאל או תנחש מחדש.');
+  }, 'לחץ שוב כדי לשכוח'));
+}
 
 export function render(el) {
   const S = state.settings;
@@ -36,6 +71,8 @@ export function render(el) {
       <div class="field"><label for="nm">השם שלך</label><input id="nm" type="text" maxlength="30" value="${esc(S.name)}"></div>
     </div>
     <div class="btn-row"><button class="btn" id="chg" type="button">${ic('lock-key')}החלפת קוד</button><button class="btn" id="lock-btn" type="button">${ic('lock')}${session.remembered ? 'נעילה (לבקש קוד מעכשיו)' : 'נעילה עכשיו'}</button></div></section>
+
+  ${rulesCard()}
 
   <section class="card"><div class="card-h"><h2>${ic('download')} גיבוי והעברה למכשיר אחר</h2></div>
     <p class="hint">הגיבוי הוא קובץ מוצפן בסיסמה שתבחר. שמור אותו במקום בטוח (למשל בכונן שלך). כדי לעבור לטלפון אחר - שחזר בו את הקובץ.</p>
@@ -70,6 +107,7 @@ export function render(el) {
   }).catch(() => { });
   $('#al', el).onchange = e => { S.autoLockMin = +e.target.value; persist(); toast('נשמר'); };
   $('#nm', el).oninput = e => { S.name = e.target.value.slice(0, 30); persist(); };
+  wireRules(el);
   $('#lock-btn', el).onclick = async () => { if (session.remembered) { await vault.setRemember(false).catch(() => { }); } lockNow(); };
   $('#upd', el).onclick = async () => { if (install.checkUpdate) { await install.checkUpdate().catch(() => { }); toast('בדקתי. אם יש גרסה חדשה תופיע הודעה למעלה.'); } else toast('בדיקת עדכונים פועלת רק כשהאתר פתוח מהאינטרנט.'); };
   $('#chg', el).onclick = changeCode;
@@ -78,8 +116,8 @@ export function render(el) {
   $('#wipe', el).onclick = wipe;
   if ($('#wipe-month', el)) armConfirm($('#wipe-month', el), () => {
     const sd = state.settings.startDay, k = $('#wm-k', el).value;
-    const removed = state.tx.filter(t => budgetKeyOf(t.date, sd) === k);
-    state.tx = state.tx.filter(t => budgetKeyOf(t.date, sd) !== k); persist(true); changed(); render(el);
+    const removed = state.tx.filter(t => txKey(t, state.settings) === k);
+    state.tx = state.tx.filter(t => txKey(t, state.settings) !== k); persist(true); changed(); render(el);
     toast(`נמחקו ${removed.length} תנועות של ${monthName(k)}`, { label: 'ביטול', fn: () => { state.tx = state.tx.concat(removed); persist(true); changed(); render(el); toast('התנועות הוחזרו'); } });
   }, 'לחץ שוב כדי למחוק');
 }

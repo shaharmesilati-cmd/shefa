@@ -1,4 +1,4 @@
-import { state, persist, changed, CAT_COLORS, CAT_ICONS } from '../store.js';
+import { state, persist, changed, CAT_COLORS, CAT_ICONS, addCategory } from '../store.js';
 import { monthSummary, autoSplit, budgetKeyOf, isoOf } from '../calc.js';
 import { $, $$, esc, ic, money, num, uid, toast, armConfirm, fmt0 } from '../util.js';
 import { catIcon } from './parts.js';
@@ -44,6 +44,9 @@ export function render(el) {
     <div class="row2">
       <div class="field"><label for="bd-inc">הכנסה חודשית נטו (₪)</label><input id="bd-inc" type="number" inputmode="decimal" value="${S.income || ''}" placeholder="למשל 12000"></div>
       <div class="field"><label for="bd-sd">חודש התקציב מתחיל ב-</label><select id="bd-sd">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${S.startDay === i + 1 ? 'selected' : ''}>${i + 1} לחודש</option>`).join('')}</select></div>
+      <div class="field" style="grid-column:1/-1"><label for="bd-bc">קנייה באשראי נספרת</label><select id="bd-bc">
+        <option value="0" ${S.byCharge ? '' : 'selected'}>בחודש שבו קניתי</option>
+        <option value="1" ${S.byCharge ? 'selected' : ''}>בחודש שבו האשראי יורד (תזרים)</option></select></div>
     </div>
     <p class="hint">${ic('info')} אם נרשמה החודש הכנסה גבוהה יותר (למשל מקובץ הבנק), החישוב משתמש בה.</p>
     <div id="bd-sum">${summaryHTML()}</div></section>
@@ -85,7 +88,7 @@ export function render(el) {
       <button class="btn small primary" id="nc-add" type="button">${ic('plus')}הוספה</button></details></section>
 
   <details class="card explain"><summary><h2>${ic('question')} איך מחושב "אפשר להוציא היום"?</h2></summary>
-    <p>הכנסה, פחות הוצאות קבועות, פחות חיסכון = <b>הפנוי להוצאות</b>. ממנו מורידים כל הוצאה משתנה שנרשמה בחודש. הוצאה שמזוהה כקבועה לא נספרת פעמיים, ותשלום חשבון האשראי מהבנק לא נספר בכלל (העסקאות עצמן כבר נספרו). קנייה שסיווגת ל"כסף שחזר" (החזרת מוצר, זיכוי) נשארת ברשימה אבל לא נספרת כהוצאה.</p>
+    <p>הכנסה, פחות הוצאות קבועות, פחות חיסכון = <b>הפנוי להוצאות</b>. ממנו מורידים כל הוצאה משתנה שנרשמה בחודש. הוצאה שמזוהה כקבועה לא נספרת פעמיים, ותשלום חשבון האשראי מהבנק לא נספר בכלל (העסקאות עצמן כבר נספרו). קנייה שסיווגת ל"כסף שחזר" (החזרת מוצר, זיכוי) נשארת ברשימה אבל לא נספרת כהוצאה. אם בחרת "בחודש שבו האשראי יורד", קנייה באשראי נספרת בחודש של החיוב (בדרך כלל החודש הבא, או לפי "תאריך חיוב" מקובץ האקסל).</p>
     <p>"אפשר להוציא היום" = מה שנשאר לחודש חלקי הימים שנותרו. אם היום הוצאת פחות, מחר הסכום יגדל.</p></details>`;
   wire(el);
 }
@@ -93,6 +96,7 @@ export function render(el) {
 function wire(el) {
   const S = state.settings;
   $('#bd-inc', el).oninput = e => { S.income = num(e.target.value); save(); };
+  $('#bd-bc', el).onchange = e => { S.byCharge = e.target.value === '1'; persist(); changed('month'); toast(S.byCharge ? 'מעכשיו קנייה באשראי נספרת בחודש שבו הכסף יורד מהחשבון.' : 'מעכשיו קנייה נספרת בחודש שבו קנית.'); };
   $('#bd-sd', el).onchange = e => { S.startDay = +e.target.value; state.ui.curKey = budgetKeyOf(isoOf(new Date()), S.startDay); persist(); changed('month'); };
   $('#sv-v', el).oninput = e => { S.savings.value = num(e.target.value); save(); };
   $$('[data-svm]', el).forEach(b => b.onclick = () => {
@@ -119,7 +123,6 @@ function wire(el) {
   $$('[data-ico]', el).forEach(b => b.onclick = () => { icon = b.dataset.ico; $$('[data-ico]', el).forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); }); });
   $('#nc-add', el).onclick = () => {
     const name = $('#nc-n', el).value.trim(); if (!name) { toast('תן שם לקטגוריה'); return; }
-    S.categories.splice(S.categories.length - 1, 0, { id: uid(), name, icon, budget: 0, weight: 0, color: CAT_COLORS[S.categories.length % CAT_COLORS.length] });
-    persist(); render(el); toast('הקטגוריה נוספה');
+    addCategory(name, icon); render(el); toast('הקטגוריה נוספה');
   };
 }

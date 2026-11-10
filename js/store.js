@@ -26,6 +26,7 @@ export function normalizeSettings(d) {
   s.startDay = Math.min(28, Math.max(1, parseInt(d.startDay) || 1));
   s.autoLockMin = [1, 5, 15, 30].includes(+d.autoLockMin) ? +d.autoLockMin : 5;
   s.lastBackup = Number(d.lastBackup) || 0;
+  s.byCharge = d.byCharge === true;
   if (d.savings) s.savings = { mode: d.savings.mode === 'fixed' ? 'fixed' : 'percent', value: num(d.savings.value) };
   if (Array.isArray(d.goals)) s.goals = d.goals.map(g => ({ id: str(g.id) || uid(), name: str(g.name), target: num(g.target), monthly: num(g.monthly), saved: num(g.saved) }));
   if (Array.isArray(d.fixed)) s.fixed = d.fixed.map(f => ({ id: str(f.id) || uid(), name: str(f.name), amount: num(f.amount), keyword: str(f.keyword, 40) }));
@@ -47,7 +48,7 @@ const validISO = d => { if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return false; 
 export function normalizeTx(t) {
   if (!t || !validISO(t.date)) return null;
   return {
-    id: str(t.id) || uid(), date: t.date, dateGuessed: t.dateGuessed === true || undefined, time: /^\d{2}:\d{2}$/.test(t.time || '') ? t.time : null, place: str(t.place, 40), card: /^\d{4}$/.test(t.card || '') ? t.card : null,
+    id: str(t.id) || uid(), date: t.date, chargeDate: validISO(t.chargeDate) ? t.chargeDate : undefined, dateGuessed: t.dateGuessed === true || undefined, time: /^\d{2}:\d{2}$/.test(t.time || '') ? t.time : null, place: str(t.place, 40), card: /^\d{4}$/.test(t.card || '') ? t.card : null,
     merchant: str(t.merchant) || 'ללא שם', amount: Math.round(num(t.amount) * 100) / 100,
     category: str(t.category, 40) || 'other', kind: ['expense', 'income', 'card-payment'].includes(t.kind) ? t.kind : 'expense',
     fixedId: t.fixedId ? str(t.fixedId) : null, installment: t.installment ? str(t.installment, 12) : null, foreign: !!t.foreign,
@@ -97,6 +98,17 @@ export async function flushNow() {
 }
 
 export const catById = id => state.settings.categories.find(c => c.id === id) || state.settings.categories.find(c => c.id === 'other');
+/** Creates a category (or returns the one with the same name) and returns its id. It is placed before "כסף שחזר" and "שונות". */
+export function addCategory(name, icon = 'tag') {
+  name = String(name || '').trim().slice(0, 40); if (!name) return null;
+  const S = state.settings, same = S.categories.find(c => c.name.trim() === name);
+  if (same) return same.id;
+  const at = S.categories.findIndex(c => c.id === REFUND || c.id === 'other');
+  const c = { id: uid(), name, icon: CAT_ICONS.includes(icon) ? icon : 'tag', budget: 0, weight: 0, color: CAT_COLORS[S.categories.length % CAT_COLORS.length] };
+  S.categories.splice(at < 0 ? S.categories.length : at, 0, c);
+  persist();
+  return c.id;
+}
 export function upsertTx(list) {
   for (const t of list) {
     const n = normalizeTx(t); if (!n) continue;

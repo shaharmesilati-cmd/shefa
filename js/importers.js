@@ -62,6 +62,7 @@ export function detectColumns(header) {
   map.details = find(H.details, [map.merchant]);
   map.currency = find(H.currency);
   map.type = map.debit >= 0 && map.credit >= 0 ? 'bank' : 'card';
+  map.chargeDate = map.type === 'card' ? h.findIndex((x, i) => x && /תאריך\s*חיוב|מועד\s*חיוב/.test(x) && i !== map.date) : -1;
   return map;
 }
 function isHeaderRow(row) {
@@ -135,7 +136,8 @@ export function rowsToTx(rows, override) {
     const details = map.details >= 0 ? cellStr(row[map.details]) : '';
     const inst = details.match(/תשלום\s*(\d+)\s*(?:מתוך|מ-?)\s*(\d+)/);
     const cur = map.currency >= 0 ? cellStr(row[map.currency]) : '';
-    res.push({ date, merchant, amount: Math.round(amount * 100) / 100, kind, installment: inst ? `${inst[1]}/${inst[2]}` : null,
+    const chargeDate = map.chargeDate >= 0 ? toISODate(row[map.chargeDate]) : null;
+    res.push({ date, chargeDate: chargeDate && chargeDate !== date ? chargeDate : null, merchant, amount: Math.round(amount * 100) / 100, kind, installment: inst ? `${inst[1]}/${inst[2]}` : null,
       foreign: !!cur && !/ש"?ח|₪|ils|nis/i.test(cur), note: details && !inst ? cleanField(details, 120) : '' });
   }
   return res;

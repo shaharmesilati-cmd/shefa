@@ -175,6 +175,14 @@ button, label[for], summary { cursor: pointer; }
 .tx-a.pos { color: var(--good); }
 .tx-a.dim { color: var(--muted); font-weight: 500; text-decoration: line-through; }
 .tx-a.back { color: var(--muted); font-weight: 500; text-decoration: line-through; text-decoration-color: #14B8C9; }
+.rules summary h2 { display: inline; }
+.rl-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; max-height: 420px; overflow-y: auto; }
+.rl-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, 50%) 44px; gap: 8px; align-items: center; }
+.rl-row[hidden] { display: none; }
+.rl-n { min-width: 0; display: flex; flex-direction: column; }
+.rl-n b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nc-inline { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.nc-inline input { flex: 1; min-width: 0; }
 .chip.back { background: #E3F7FA; color: #0E7C89; }
 .chip { display: inline-flex; align-items: center; gap: 4px; font-size: .7rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
 .chip .ic { width: .9em; height: .9em; }

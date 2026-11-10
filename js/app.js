@@ -133,7 +133,7 @@ function autoClassify() {
   const upd = [];
   for (const t of state.tx) {
     if (t.kind !== 'expense' || (t.category || 'other') !== 'other' || t.confirmed) continue;
-    const r = classify(t.merchant, { rules: state.settings.rules, ids, history });
+    const r = classify(t.merchant, { rules: state.settings.rules, ids, history, cats: state.settings.categories });
     if (r.conf >= AUTO) upd.push({ ...t, category: r.cat });
   }
   if (upd.length) { upsertTx(upd); changed(); toast(`${upd.length} קניות סווגו לבד לפי מה שלמדתי`); }

@@ -245,3 +245,31 @@ console.log('v1.2 tests passed');
   assert.equal(rows[0].dupOf, 's0', '"טרם נקלט" matched to its real name');
   console.log('v2.8 screenshot tests passed');
 }
+
+// v2.9 - prepaid cards, charge month, new categories, several files
+{
+  const { classify } = await import('../js/categorize.js');
+  const { monthSummary, txKey } = await import('../js/calc.js');
+  const { detectColumns, rowsToTx } = await import('../js/importers.js');
+  const cats = [{ id: 'super', name: 'סופר' }, { id: 'pp', name: 'כרטיס נטען' }, { id: 'other', name: 'שונות' }];
+  const ids = new Set(cats.map(c => c.id));
+  assert.equal(classify('טעינות - חבר של קבע', { ids, cats }).cat, 'pp', 'a Hever load goes to the user\'s prepaid category');
+  assert.equal(classify('חבר כללי', { ids, cats }).cat, 'pp');
+  assert.equal(classify('טעינות - חבר של קבע', { ids, cats, rules: { 'טעינותחברשלקבע': 'super' } }).cat, 'super', 'the user\'s own rule wins');
+  assert.notEqual(classify('טעינות - חבר של קבע', { ids: new Set(['super', 'other']), cats: cats.filter(c => c.id !== 'pp') }).cat, 'pp');
+  // charge month
+  const card = { date: '2026-10-28', kind: 'expense', card: '3314', amount: 100 };
+  const cash = { date: '2026-10-28', kind: 'expense', source: 'manual', amount: 50 };
+  assert.equal(txKey(card, { startDay: 1 }), '2026-10');
+  assert.equal(txKey(card, { startDay: 1, byCharge: true }), '2026-11', 'a card purchase counts when it is charged');
+  assert.equal(txKey({ ...card, chargeDate: '2026-12-02' }, { startDay: 1, byCharge: true }), '2026-12', 'the file\'s charge date wins');
+  assert.equal(txKey(cash, { startDay: 1, byCharge: true }), '2026-10', 'cash stays in its month');
+  const S = { income: 0, startDay: 1, savings: { mode: 'fixed', value: 0 }, fixed: [], categories: [], byCharge: true };
+  assert.equal(monthSummary(S, [card, cash], '2026-11', new Date(2026, 10, 5)).spent, 100);
+  // Excel with a charge date column
+  const map = detectColumns(['תאריך רכישה', 'שם בית עסק', 'סכום חיוב', 'תאריך חיוב']);
+  assert.equal(map.chargeDate, 3);
+  const tx = rowsToTx([{ row: ['28/10/2026', 'זארה', '120.00', '10/11/2026'], map }]);
+  assert.equal(tx[0].chargeDate, '2026-11-10');
+  console.log('v2.9 tests passed');
+}

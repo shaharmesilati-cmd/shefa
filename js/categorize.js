@@ -45,12 +45,19 @@ export const AUTO = 0.7;
  *   history  0.8  purchases with a similar name already have a category
  *   known    0.85 the built-in list of Israeli businesses and keywords
  */
+// Loading a prepaid card ("חבר", gift cards): the money moves to a card that is spent later in many shops.
+const PREPAID = /חבר\s*(?:של\s*קבע|כללי|צרכנות|משרתי|לעובדי|הטבות)|מ\.\s?חבר|טעינ(?:ה|ות)\s*-?\s*(?:כרטיס|חבר)|כרטיס\s*נטען|תו\s*הזהב|buy\s?me|ביי\s?מי|gift\s?card|גיפט\s?קארד|תו\s*קני(?:י)?ה/i;
+const PREPAID_CAT = /חבר|נטען|טעינ|גיפט|gift|תו\s*קני|תווי/i;
+export const isPrepaid = m => PREPAID.test(String(m || ''));
+
 export function classify(merchant, ctx = {}) {
-  const { rules = {}, ids = new Set(), history = [] } = ctx;
+  const { rules = {}, ids = new Set(), history = [], cats = [] } = ctx;
   const ok = c => c && c !== 'other' && c !== 'refund' && (!ids.size || ids.has(c));
   const raw = String(merchant || ''), n = normMerchant(raw);
   if (isGeneric(raw)) return { cat: 'other', conf: 0, why: 'generic' };
   if (ok(rules[n])) return { cat: rules[n], conf: 1, why: 'rule' };
+  // the user's own prepaid category (e.g. "כרטיס נטען" or "חבר") gets every prepaid load
+  if (PREPAID.test(raw)) { const c = cats.find(x => ok(x.id) && PREPAID_CAT.test(x.name || '')); if (c) return { cat: c.id, conf: 0.95, why: 'known' }; }
   let best = null;
   for (const [k, c] of Object.entries(rules)) {
     if (!ok(c)) continue;
