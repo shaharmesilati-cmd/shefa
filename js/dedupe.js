@@ -13,12 +13,25 @@ export function similarity(a, b) {
   for (const n of B.values()) total += n;
   return total ? (2 * inter) / total : 0;
 }
+/** A purchase the card company has not "received" yet shows no shop name - the real name comes later. */
+export const isPlaceholder = m => /טרם\s*נקלט|בתהליך\s*קליטה|^\s*pending\s*$/i.test(String(m || ''));
+const DAY = 86400000;
+const daysApart = (x, y) => Math.abs(new Date(x + 'T12:00') - new Date(y + 'T12:00')) / DAY;
+
 export function samePurchase(a, b, ignoreCard = false) {
-  if (a.date !== b.date) return false;
   if (Math.abs(Number(a.amount) - Number(b.amount)) > 0.009) return false;
   if (a.time && b.time && a.time !== b.time) return false;
   if (!ignoreCard && a.card && b.card && a.card !== b.card) return false; // same shop and amount on two different cards = two purchases
-  return similarity(a.merchant, b.merchant) >= 0.55;
+  const sim = similarity(a.merchant, b.merchant);
+  // a row whose date could not be read got a guessed date: compare the shop name strictly instead, within a week
+  if (a.date !== b.date) return !!(a.dateGuessed || b.dateGuessed) && daysApart(a.date, b.date) <= 7 && sim >= 0.8;
+  // "טרם נקלט" on one side: the same day and the same amount is the same purchase
+  if (isPlaceholder(a.merchant) || isPlaceholder(b.merchant)) return true;
+  if (sim >= 0.55) return true;
+  // the screen reader may garble a name differently in two screenshots. Same day + same exact amount with agorot
+  // (278.01) is practically never a coincidence; a round amount (12.00) still needs the names to look somewhat alike.
+  const cents = Math.round(Number(a.amount) * 100) % 100 !== 0;
+  return cents ? sim >= 0.1 || !a.merchant || !b.merchant : sim >= 0.35;
 }
 
 /**

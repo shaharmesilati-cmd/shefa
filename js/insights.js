@@ -70,7 +70,7 @@ export function monthInsights(settings, tx, key, today = new Date()) {
 /** Purchases that still sit in "other" and were never confirmed - the "needs your attention" list. */
 export function needsCategory(settings, tx, key) {
   const C = monthSummary(settings, tx, key);
-  return C.inPeriod.filter(t => isCounted(t) && t.kind === 'expense' && (t.category || 'other') === 'other' && !t.confirmed && !t.fixedId)
+  return C.inPeriod.filter(t => isCounted(t) && t.kind === 'expense' && (t.category || 'other') === 'other' && !t.confirmed && !t.fixedId && !/טרם\s*נקלט/.test(t.merchant || ''))
     .sort((a, b) => b.amount - a.amount);
 }
 

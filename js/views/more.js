@@ -4,7 +4,7 @@ import { $, esc, ic, toast, openSheet, download, armConfirm, monthName } from '.
 import { budgetKeyOf } from '../calc.js';
 import { install, lockNow, session, startAutoLock, stopAutoLock } from '../app.js';
 
-const VERSION = '2.7.0';
+const VERSION = '2.8.0';
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 

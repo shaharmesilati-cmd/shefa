@@ -225,3 +225,23 @@ console.log('v1.2 tests passed');
   }
   console.log('v2.7 refund tests passed');
 }
+
+// v2.8 - screenshots: limit lines, card titles, "טרם נקלט", garbled names, unread dates
+{
+  const { parseStatement } = await import('../js/paste.js');
+  const { markDuplicates } = await import('../js/dedupe.js');
+  const today = new Date(2026, 10, 10, 16, 30);
+  const gold = parseStatement('16:28\nגולד - מסטרקארד 3314\nWINN מסגרת של: 30,000\nיתרה פנויה: 29,606.98\nעם שירות אשראי מתגלגל אפשר\nלקבוע את סכום החיוב החודשי,\nעסקאות שאושרו וטרם נקלטו\nטעינות - חבר של קבע 175.00\n10.11.26\nסה"כ עסקאות שטרם נקלטו 175.00\nמתנה קסומה 218.00\n08.11.26', today).rows;
+  assert.deepEqual(gold.map(r => [r.card, r.merchant, r.amount]), [['3314', 'טעינות - חבר של קבע', 175], ['3314', 'מתנה קסומה', 218]], 'no credit limit, no card title as a shop');
+  const fly = parseStatement('3315 CARD FLY\nטרם נקלט 150.00\n10.11.26\nספק משיכות atm 508.90\n10.11.26\nביטוח ישיר-חיים 136.25\n26 הוראת קבע\nTD YELLOW-N\'yj7\'79N 278.01\n07.11.26\nחוף המגדלור בע"מ 12.00\n07.11.26', today).rows;
+  assert.ok(fly.every(r => r.card === '3315'), 'card digits read before the card name');
+  const { normalizeTx } = await import('../js/store.js');
+  const saved = fly.map((r, i) => normalizeTx({ ...r, id: 's' + i, kind: 'expense' }));
+  assert.equal(saved[2].dateGuessed, true, 'an unread date is remembered as a guess');
+  // next day: the pending one got its name, names read differently, the date of the insurance was read this time
+  const next = parseStatement('3315 CARD FLY\nשופרסל דיל 150.00\n10.11.26\nספק משיכות atm 508.90\n10.11.26\nביטוח ישיר-חיים 136.25\n08.11.26 הוראת קבע\nפז אפליקצית-YELLOW 278.01\n07.11.26\nחוף המגדלור בע"מ 12.00\n07.11.26\nקפה ג\'ו 12.00\n07.11.26', new Date(2026, 10, 11)).rows;
+  const rows = markDuplicates([next], saved);
+  assert.deepEqual(rows.map(r => r.dup ? 'dup' : 'new'), ['dup', 'dup', 'dup', 'dup', 'dup', 'new'], 'only the really new purchase is new');
+  assert.equal(rows[0].dupOf, 's0', '"טרם נקלט" matched to its real name');
+  console.log('v2.8 screenshot tests passed');
+}

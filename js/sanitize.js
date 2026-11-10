@@ -33,7 +33,7 @@ const RULES = [
   [/(חשבון|ח-ן|ח"ן|סניף|מס['׳]?\s?לקוח|מספר לקוח|(?<![a-z])account(?![a-z]))[^\n\d]{0,8}\d[\d\-\/]{3,}/gi, 'account'],
 ];
 // whole lines that only carry account-level information
-const DROP_LINE = /בעל[ת]? הכרטיס|שם בעל|מסגרת(?:\s+(?:אשראי|פנויה|כרטיס)|[\s:]*[₪\d])|ניצול(?:\s+מסגרת|[\s:]*[₪\d])|יתרה לניצול|יתרת (זכות|חובה|חשבון)|קוד סודי|סיסמה|(?<![a-z])password(?![a-z])|(?<![a-z])pin(?![a-z])/i;
+const DROP_LINE = /בעל[ת]? הכרטיס|שם בעל|מסגרת\s+של|מתוך\s+מסגרת|יתרה\s*(?:פנויה|זמינה|לניצול)|מסגרת(?:\s+(?:אשראי|פנויה|כרטיס)|[\s:]*[₪\d])|ניצול(?:\s+מסגרת|[\s:]*[₪\d])|יתרה לניצול|יתרת (זכות|חובה|חשבון)|קוד סודי|סיסמה|(?<![a-z])password(?![a-z])|(?<![a-z])pin(?![a-z])/i;
 
 /** Returns the cleaned text and how many sensitive items were removed. */
 export function redactSensitive(text) {

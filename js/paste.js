@@ -15,9 +15,10 @@ const INST = /תשלום\s*(\d+)\s*(?:מתוך|מ)\s*(\d+)/;
 // A real name has at least 2 Hebrew letters or one Latin word of 3+ letters (status-bar noise like "al" or "o is" does not)
 const hasWords = s => (s.match(/[\u0590-\u05FF]/g) || []).length >= 2 || /[a-z]{3,}/i.test(s);
 // Summary lines carry a TOTAL, not a purchase: skip them together with their amount
-const TOTAL = /סה["״']?\s?כ|סך\s*הכל|סך\s*חיוב|לחיוב\s*החודש|יתרה|total/i;
+const TOTAL = /סה["״']?\s?כ|סך\s*הכל|סך\s*חיוב|לחיוב\s*החודש|יתרה|מסגרת|ניצול|total/i;
 // Section titles, buttons and footers of the card app
 const HEADING = /^(עסקאות|חיובים|תנועות)(\s|$)|עסקאות\s+(שאושרו|למועד|בחו|בארץ|אחרונות)|חזרה למעלה|למועד חיוב|טרם נקלטו/;
+const CARDWORD = /card|כרטיס|גולד|זהב|פלטינום|פלטינה|טיטניום|מסטרקארד|מאסטרקארד|ויזה|visa|master|amex|אמקס|דיינרס|diners|fly|יוניק|unique|^\W*$/i;
 const STOP = /תנאים משפטיים|הנתונים נכונים|הנתונים לא כוללים/;
 
 const CITIES = ['תל אביב', 'ת"א', 'ירושלים', 'חיפה', 'ראשון לציון', 'ראשל"צ', 'פתח תקווה', 'פ"ת', 'אשדוד', 'נתניה', 'באר שבע', 'ב"ש', 'בני ברק', 'חולון', 'רמת גן', 'אשקלון', 'רחובות', 'בת ים', 'בית שמש', 'כפר סבא', 'הרצליה', 'חדרה', 'מודיעין', 'נצרת', 'לוד', 'רמלה', 'רעננה', 'הוד השרון', 'גבעתיים', 'קריית גת', 'קרית גת', 'נהריה', 'עפולה', 'אילת', 'קריית אתא', 'קרית אתא', 'קריית ביאליק', 'קרית ביאליק', 'קריית מוצקין', 'קרית מוצקין', 'קריית ים', 'קרית ים', 'קריית אונו', 'קרית אונו', 'קריית שמונה', 'קרית שמונה', 'יבנה', 'אור יהודה', 'נס ציונה', 'ראש העין', 'טבריה', 'צפת', 'דימונה', 'אופקים', 'שדרות', 'נתיבות', 'יהוד', 'גבעת שמואל', 'אריאל', 'מעלה אדומים', 'זכרון יעקב', 'כרמיאל', 'עכו', 'טירת כרמל', 'יקנעם', 'סביון', 'כפר יונה', 'אבן יהודה', 'שוהם', 'גדרה', 'קיסריה', 'פרדס חנה', 'רמת השרון', 'הרצליה פיתוח', 'מבשרת', 'אום אל פחם', 'רהט', 'טייבה', 'שפרעם', 'ערד', 'מצפה רמון', 'יוקנעם', 'קצרין', 'בית שאן', 'מגדל העמק', 'נוף הגליל', 'עתלית', 'tel aviv', 'jerusalem', 'haifa'];
@@ -43,16 +44,25 @@ export function parseStatement(text, today = new Date()) {
   let seenContent = false, seenAmount = false;
   for (let line of safe.split(/\n+/)) {
     line = line.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').replace(/[|_~^«»]/g, ' ').replace(/\s+/g, ' ').trim();
+    line = line.replace(/הוראת\s*קבע|הו"ק(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim(); // a label under the purchase, not a shop
+    if (!line) continue;
     if (STOP.test(line)) break; // legal footer: nothing after it is a purchase
     if (TOTAL.test(line)) continue;
     // top of the screen: a line that ends with 4 digits and has no other numbers is the card (e.g. "זהב 4093" or just "4093")
     if (!seenAmount && !/⟦C/.test(line)) {
       const m4 = line.match(/(?<![\d.,:\/₪-])(\d{4})\s*$/);
       if (m4 && !/\d/.test(line.slice(0, m4.index)) && !SKIP.test(line) && !isYearLine(line, +m4[1])) { tokens.push({ t: 'cardctx', v: m4[1] }); continue; }
+      // the screen reader sometimes puts the digits first: "3315 CARD FLY", "4093 זהב"
+      const f4 = line.match(/^(\d{4})(?![\d.,:\/])\s+(\D{2,40})$/);
+      if (f4 && CARDWORD.test(f4[2]) && !isYearLine(line, +f4[1])) { tokens.push({ t: 'cardctx', v: f4[1] }); continue; }
     }
     const inc = line.includes('⟦IN⟧'); if (inc) line = line.replace(/⟦IN⟧/g, ' ').trim(); // money that came IN (bank 'זכות' column)
     const cm = [...line.matchAll(/⟦C(\d{4})⟧/g)];
-    if (cm.length) { tokens.push({ t: 'cardctx', v: cm[cm.length - 1][1] }); line = line.replace(/⟦C\d{4}⟧/g, ' ').trim(); }
+    if (cm.length) {
+      tokens.push({ t: 'cardctx', v: cm[cm.length - 1][1] }); line = line.replace(/⟦C\d{4}⟧/g, ' ').trim();
+      // the card's title ("גולד - מסטרקארד 3314") is not a shop name
+      if (!/\d/.test(line) && (!seenAmount || CARDWORD.test(line))) continue;
+    }
     if (!line) continue;
     let rest = line;
     const inst = rest.match(INST);
@@ -103,7 +113,7 @@ export function parseStatement(text, today = new Date()) {
     rows: rows.map(r => {
       if (r.date) lastDate = r.date;
       return { card: r.card || firstCard || null, date: r.date || lastDate || isoOf(today), time: r.time || null, merchant: r.name, place: placeOf(r.name), amount: r.amount,
-        installment: r.inst || null, foreign: !!r.fx, kind: r.inc ? 'income' : undefined, amount: r.inc ? Math.abs(r.amount) : r.amount, dateGuessed: !r.date && !lastDate };
+        installment: r.inst || null, foreign: !!r.fx, kind: r.inc ? 'income' : undefined, amount: r.inc ? Math.abs(r.amount) : r.amount, dateGuessed: !r.date };
     }),
   };
 }

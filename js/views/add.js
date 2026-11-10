@@ -4,7 +4,7 @@ import { $, $$, esc, ic, money, num, uid, toast, shortDate } from '../util.js';
 import { readWorkbook, extractRows, rowsToTx } from '../importers.js';
 import { parseStatement, placeOf } from '../paste.js';
 import { readImage, stopOcr } from '../ocr.js';
-import { markDuplicates } from '../dedupe.js';
+import { markDuplicates, isPlaceholder } from '../dedupe.js';
 import { parsePayslip } from '../payslip.js';
 import { isoOf } from '../calc.js';
 import { cleanField, cardOf } from '../sanitize.js';
@@ -291,10 +291,10 @@ function toRow(x, source) {
   const merchant = cleanField(x.merchant) || 'ללא שם';
   if (kind === 'expense' && source === 'bank' && looksLikeCardPayment(merchant)) kind = 'card-payment';
   const fx = kind === 'expense' ? matchFixed(merchant, S.fixed) : null;
-  const cls = classify(merchant, { rules: S.rules, ids, history: HIST || (HIST = historyOf(state.tx)) });
+  const cls = isPlaceholder(merchant) ? { cat: 'other', conf: 0, why: 'pending' } : classify(merchant, { rules: S.rules, ids, history: HIST || (HIST = historyOf(state.tx)) });
   return { id: uid(), card: /^\d{4}$/.test(x.card || '') ? x.card : (review0card || null), date: x.date, time: x.time || null, merchant, place: x.place || placeOf(merchant), amount: x.amount, kind,
     category: cls.conf >= AUTO ? cls.cat : 'other', auto: cls.conf >= AUTO && cls.why !== 'rule' ? cls.why : null, installment: x.installment || null, foreign: !!x.foreign,
-    note: cleanField(x.note, 120), fixedId: fx ? fx.id : null, on: true, dup: null, guessed: !!x.dateGuessed };
+    note: cleanField(x.note, 120), fixedId: fx ? fx.id : null, on: true, dup: null, guessed: !!x.dateGuessed, dateGuessed: !!x.dateGuessed, origDate: x.date, pending: isPlaceholder(merchant) };
 }
 let HIST = null;
 function buildReview(groupsRaw, source) {
@@ -304,8 +304,20 @@ function buildReview(groupsRaw, source) {
   rows.forEach(r => { if (r.dup) r.on = false; });
   rows.sort((a, b) => a.g - b.g || (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')));
   // purchases already saved without a card (or with another card) get the card this screenshot shows
-  const fixes = rows.filter(r => r.dup === 'saved' && r.card && state.tx.find(t => t.id === r.dupOf && t.card !== r.card)).length;
+  const fixes = rows.filter(r => r.dup === 'saved' && savedFix(r)).length;
   review = { rows, source, removed: 0, cardFixes: fixes, groups: groupsRaw.length };
+}
+/** What a saved purchase learns from this screenshot: its card, and its real name if it was saved as "טרם נקלט". */
+function savedFix(r) {
+  const t = state.tx.find(x => x.id === r.dupOf); if (!t) return null;
+  const ch = {};
+  if (/^\d{4}$/.test(r.card || '') && t.card !== r.card) ch.card = r.card;
+  if (t.dateGuessed && !r.dateGuessed && r.date) { if (r.date !== t.date) ch.date = r.date; ch.dateGuessed = undefined; }
+  if (isPlaceholder(t.merchant) && !isPlaceholder(r.merchant) && r.merchant !== 'ללא שם') {
+    ch.merchant = cleanField(r.merchant); ch.place = cleanField(r.place, 40);
+    if (t.kind === 'expense' && (t.category || 'other') === 'other' && !t.confirmed) ch.category = r.category;
+  }
+  return Object.keys(ch).length ? { ...t, ...ch } : null;
 }
 
 function renderReview(el) {
@@ -324,7 +336,7 @@ function renderReview(el) {
         ${review.removed ? `<span class="chip lilac">${ic('shield')}${review.removed} פרטים רגישים נמחקו</span>` : ''}
         ${review.failed ? `<span class="chip">${review.failed} צילומים לא נקראו</span>` : ''}
       </div>
-      ${review.cardFixes ? `<p class="hint">${ic('card')} ${review.cardFixes} עסקאות שכבר שמורות יקבלו את הכרטיס שמופיע בצילום.</p>` : ''}
+      ${review.cardFixes ? `<p class="hint">${ic('refresh')} ${review.cardFixes} עסקאות שכבר שמורות יתעדכנו לפי הצילום (כרטיס, תאריך שלא נקרא קודם, או שם העסק במקום "טרם נקלט").</p>` : ''}
       ${review.pdf ? `<p class="hint">${ic('info')} נקראו ${review.pdf.pages} עמודים${review.pdf.scanned ? ` (${review.pdf.scanned} סרוקים - בדוק את הסכומים)` : ''}. הקובץ עצמו לא נשמר.</p>` : ''}
       ${review.source === 'screenshot' ? `<p class="hint">${ic('shield')} הצילומים כבר נמחקו מהזיכרון. בדוק שהשמות והסכומים נכונים - הקריאה מצילום לא תמיד מושלמת.</p>` : ''}
       ${fileBar}
@@ -336,7 +348,7 @@ function renderReview(el) {
         <div class="rev-top"><b class="rev-name">${esc(r.merchant)}</b><b class="rev-amt">${money(r.amount, 'auto')}</b></div>
         <div class="rev-meta">${ic('calendar')}<span>${shortDate(r.date)}${r.time ? ' · ' + esc(r.time) : ''}</span>${r.place ? `<span>· ${esc(r.place)}</span>` : ''}${r.card ? `<span class="chip">${ic('card')}${esc(r.card)}</span>` : ''}
           ${r.dup ? `<span class="chip warn">${r.dup === 'saved' ? 'כבר שמורה' : 'בצילום אחר'}</span>` : ''}
-          ${r.fixedId ? `<span class="chip lilac">${ic('lock')}קבועה</span>` : ''}${r.kind === 'card-payment' ? `<span class="chip">${ic('card')}חיוב האשראי - לא נספר</span>` : ''}${r.kind === 'income' ? `<span class="chip good">הכנסה</span>` : ''}${r.kind === 'expense' && r.category === 'refund' ? `<span class="chip back">${ic('arrow-u-up-left')}חזר · לא נספר</span>` : ''}${r.kind === 'expense' && r.category === 'other' ? `<span class="chip warn">${ic('question')}בחר קטגוריה</span>` : r.auto ? `<span class="chip good">${ic('sparkle')}סווג לבד</span>` : ''}${r.installment ? `<span class="chip">תשלום ${esc(r.installment)}</span>` : ''}
+          ${r.fixedId ? `<span class="chip lilac">${ic('lock')}קבועה</span>` : ''}${r.kind === 'card-payment' ? `<span class="chip">${ic('card')}חיוב האשראי - לא נספר</span>` : ''}${r.kind === 'income' ? `<span class="chip good">הכנסה</span>` : ''}${r.kind === 'expense' && r.category === 'refund' ? `<span class="chip back">${ic('arrow-u-up-left')}חזר · לא נספר</span>` : ''}${r.pending ? `<span class="chip">${ic('info')}טרם נקלט - השם יתעדכן בצילום הבא</span>` : r.kind === 'expense' && r.category === 'other' ? `<span class="chip warn">${ic('question')}בחר קטגוריה</span>` : r.auto ? `<span class="chip good">${ic('sparkle')}סווג לבד</span>` : ''}${r.installment ? `<span class="chip">תשלום ${esc(r.installment)}</span>` : ''}
           ${r.foreign ? `<span class="chip peach">מט"ח</span>` : ''}${r.guessed ? `<span class="chip warn">בדוק תאריך</span>` : ''}${r.amount < 0 ? `<span class="chip good">זיכוי</span>` : ''}</div>
         <div class="rev-cat" ${r.kind === 'expense' ? '' : 'hidden'}><select data-k="category" aria-label="קטגוריה">${catOptions(r.category)}</select></div>
         <details class="rev-edit"><summary>${ic('pencil')}תיקון</summary><div class="rev-f">
@@ -416,15 +428,15 @@ function save(el) {
   let learned = false;
   for (const r of chosen) if (r.touched && r.kind === 'expense' && r.category !== 'refund') { state.settings.rules[normMerchant(r.merchant)] = r.category; learned = true; }
   if (learned) persist();
-  upsertTx(chosen.map((r, i) => ({ id: r.id, date: r.date, time: /^\d{2}:\d{2}$/.test(r.time || '') ? r.time : null, merchant: cleanField(r.merchant), place: cleanField(r.place, 40),
+  upsertTx(chosen.map((r, i) => ({ id: r.id, date: r.date, dateGuessed: r.dateGuessed && r.date === r.origDate ? true : undefined, time: /^\d{2}:\d{2}$/.test(r.time || '') ? r.time : null, merchant: cleanField(r.merchant), place: cleanField(r.place, 40),
     card: /^\d{4}$/.test(r.card || '') ? r.card : null, amount: num(r.amount), kind: r.kind, category: r.category, fixedId: r.kind === 'expense' ? r.fixedId : null, installment: r.installment,
     foreign: r.foreign, note: r.note, source: review.source, added: now + i })));
-  const fix = review.rows.filter(r => r.dup === 'saved' && /^\d{4}$/.test(r.card || '')).map(r => { const t = state.tx.find(x => x.id === r.dupOf); return t && t.card !== r.card ? { ...t, card: r.card } : null; }).filter(Boolean);
+  const fix = review.rows.filter(r => r.dup === 'saved').map(savedFix).filter(Boolean);
   if (fix.length) upsertTx(fix);
   const keys = [...new Set(chosen.map(r => budgetKeyOf(r.date, state.settings.startDay)))].sort();
   if (keys.length && !keys.includes(state.ui.curKey)) state.ui.curKey = keys[keys.length - 1];
   review = null; mode = null; fileCtx = null;
-  toast(`נשמרו ${chosen.length} תנועות${fix.length ? ` · ${fix.length} קיבלו כרטיס` : ''}`);
+  toast(`נשמרו ${chosen.length} תנועות${fix.length ? ` · ${fix.length} קיימות עודכנו` : ''}`);
   location.hash = 'home';
   changed();
 }
