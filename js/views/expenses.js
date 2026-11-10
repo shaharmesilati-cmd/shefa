@@ -39,14 +39,15 @@ function list(el) {
       || (isFinite(qa) && String(t.amount).startsWith(String(qa))));
   }
   const exp = t => t.kind === 'expense' && !t.ignored;
-  if (f.cat === '__var') tx = tx.filter(t => exp(t) && !t.fixedId);
-  else if (f.cat === '__fixed') tx = tx.filter(t => exp(t) && t.fixedId);
+  if (f.cat === '__var') tx = tx.filter(t => exp(t) && !t.fixedId && t.category !== 'refund');
+  else if (f.cat === '__fixed') tx = tx.filter(t => exp(t) && t.fixedId && t.category !== 'refund');
   else if (f.cat === '__income') tx = tx.filter(t => t.kind === 'income');
   else if (f.cat === '__card') tx = tx.filter(t => t.kind === 'card-payment');
   else if (f.cat.startsWith('card:')) tx = tx.filter(t => t.card === f.cat.slice(5));
   else if (f.cat) tx = tx.filter(t => exp(t) && catById(t.category).id === f.cat);
-  const spend = tx.filter(exp).reduce((a, t) => a + t.amount, 0);
-  $('#ex-total', el).innerHTML = `${tx.length} תנועות${spend ? ' · הוצאות ' + money(spend, 'auto') : ''}`;
+  const spend = tx.filter(t => exp(t) && t.category !== 'refund').reduce((a, t) => a + t.amount, 0);
+  const back = tx.filter(t => exp(t) && t.category === 'refund' && t.amount > 0).reduce((a, t) => a + t.amount, 0);
+  $('#ex-total', el).innerHTML = `${tx.length} תנועות${spend ? ' · הוצאות ' + money(spend, 'auto') : ''}${back ? ' · חזר ' + money(back, 'auto') : ''}`;
   const L = $('#ex-list', el);
   if (!tx.length) {
     L.innerHTML = `<div class="empty">${ic(q || f.cat ? 'search' : 'receipt', 'big')}<p>${q || f.cat ? 'לא נמצאו תנועות שמתאימות.' : 'אין תנועות בחודש הזה.'}</p>${q || f.cat ? '' : `<a class="btn small primary" href="#add">${ic('plus')}הוספת הוצאות</a>`}</div>`;

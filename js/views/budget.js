@@ -3,7 +3,7 @@ import { monthSummary, autoSplit, budgetKeyOf, isoOf } from '../calc.js';
 import { $, $$, esc, ic, money, num, uid, toast, armConfirm, fmt0 } from '../util.js';
 import { catIcon } from './parts.js';
 
-const ICON_NAMES = { 'shopping-cart': 'עגלת קניות', 'fork-knife': 'אוכל', car: 'רכב', 't-shirt': 'בגדים', 'house-line': 'בית', 'first-aid': 'בריאות', popcorn: 'בילויים', wifi: 'תקשורת', gift: 'מתנה', 'dots-circle': 'שונות', coffee: 'קפה', airplane: 'טיסה', baby: 'תינוק', barbell: 'כושר', paw: 'חיות מחמד', book: 'ספר', lightning: 'חשמל', graduation: 'לימודים', gas: 'דלק', bus: 'תחבורה ציבורית', heart: 'לב', pill: 'תרופות', scissors: 'מספרה', game: 'משחקים', tag: 'תגית' };
+const ICON_NAMES = { 'shopping-cart': 'עגלת קניות', 'fork-knife': 'אוכל', car: 'רכב', 't-shirt': 'בגדים', 'house-line': 'בית', 'first-aid': 'בריאות', popcorn: 'בילויים', wifi: 'תקשורת', gift: 'מתנה', 'dots-circle': 'שונות', coffee: 'קפה', airplane: 'טיסה', baby: 'תינוק', barbell: 'כושר', paw: 'חיות מחמד', book: 'ספר', lightning: 'חשמל', graduation: 'לימודים', gas: 'דלק', bus: 'תחבורה ציבורית', heart: 'לב', pill: 'תרופות', scissors: 'מספרה', game: 'משחקים', 'arrow-u-up-left': 'כסף שחזר', tag: 'תגית' };
 const save = () => { persist(); summaries(); };
 // The budget is the same for every month; numbers here are for the current month.
 const nowKey = () => budgetKeyOf(isoOf(new Date()), state.settings.startDay);
@@ -74,7 +74,7 @@ export function render(el) {
 
   <section class="card"><div class="card-h"><h2>${ic('sliders')} תקציב לקטגוריות</h2><button class="btn small primary" id="auto" type="button">${ic('sparkle')}חלוקה אוטומטית</button></div>
     <p class="hint">החלוקה האוטומטית מחלקת את הפנוי לפי יחס מקובל (סופר 30%, רכב 14%, אוכל בחוץ 10%...). אחר כך משנים כל סכום כרצונך.</p>
-    <div class="elist">${S.categories.map(c => { const sp = SPENT.byCat[c.id] || 0; return `<div class="crow">${catIcon(c)}
+    <div class="elist">${S.categories.filter(c => c.id !== 'refund').map(c => { const sp = SPENT.byCat[c.id] || 0; return `<div class="crow">${catIcon(c)}
       <div class="crow-n"><input type="text" id="c-n-${c.id}" data-c="${c.id}" data-k="name" value="${esc(c.name)}" aria-label="שם הקטגוריה">
         <small class="${c.budget && sp > c.budget ? 't-bad' : ''}">${sp ? `יצא החודש ${money(sp)}` : 'עוד לא יצא החודש'}</small></div>
       <input type="number" inputmode="decimal" id="c-b-${c.id}" data-c="${c.id}" data-k="budget" value="${c.budget || ''}" placeholder="0" aria-label="תקציב ל${esc(c.name)}">
@@ -85,7 +85,7 @@ export function render(el) {
       <button class="btn small primary" id="nc-add" type="button">${ic('plus')}הוספה</button></details></section>
 
   <details class="card explain"><summary><h2>${ic('question')} איך מחושב "אפשר להוציא היום"?</h2></summary>
-    <p>הכנסה, פחות הוצאות קבועות, פחות חיסכון = <b>הפנוי להוצאות</b>. ממנו מורידים כל הוצאה משתנה שנרשמה בחודש. הוצאה שמזוהה כקבועה לא נספרת פעמיים, ותשלום חשבון האשראי מהבנק לא נספר בכלל (העסקאות עצמן כבר נספרו).</p>
+    <p>הכנסה, פחות הוצאות קבועות, פחות חיסכון = <b>הפנוי להוצאות</b>. ממנו מורידים כל הוצאה משתנה שנרשמה בחודש. הוצאה שמזוהה כקבועה לא נספרת פעמיים, ותשלום חשבון האשראי מהבנק לא נספר בכלל (העסקאות עצמן כבר נספרו). קנייה שסיווגת ל"כסף שחזר" (החזרת מוצר, זיכוי) נשארת ברשימה אבל לא נספרת כהוצאה.</p>
     <p>"אפשר להוציא היום" = מה שנשאר לחודש חלקי הימים שנותרו. אם היום הוצאת פחות, מחר הסכום יגדל.</p></details>`;
   wire(el);
 }

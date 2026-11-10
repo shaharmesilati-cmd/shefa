@@ -47,7 +47,7 @@ export const AUTO = 0.7;
  */
 export function classify(merchant, ctx = {}) {
   const { rules = {}, ids = new Set(), history = [] } = ctx;
-  const ok = c => c && c !== 'other' && (!ids.size || ids.has(c));
+  const ok = c => c && c !== 'other' && c !== 'refund' && (!ids.size || ids.has(c));
   const raw = String(merchant || ''), n = normMerchant(raw);
   if (isGeneric(raw)) return { cat: 'other', conf: 0, why: 'generic' };
   if (ok(rules[n])) return { cat: rules[n], conf: 1, why: 'rule' };
@@ -72,7 +72,7 @@ export function classify(merchant, ctx = {}) {
 }
 
 /** Purchases (already categorised) that the classifier can learn from. */
-export const historyOf = tx => tx.filter(t => t.kind === 'expense' && t.category && t.category !== 'other' && !t.ignored).slice(-800);
+export const historyOf = tx => tx.filter(t => t.kind === 'expense' && t.category && t.category !== 'other' && t.category !== 'refund' && !t.ignored).slice(-800);
 
 export function guessCategory(merchant, rules = {}, categoryIds = new Set(), history = []) {
   const r = classify(merchant, { rules, ids: categoryIds, history });

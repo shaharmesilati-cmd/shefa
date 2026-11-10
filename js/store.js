@@ -1,20 +1,20 @@
 // App state in memory while unlocked; persisted encrypted through vault.js.
 import * as vault from './vault.js';
-import { budgetKeyOf, isoOf } from './calc.js';
+import { budgetKeyOf, isoOf, REFUND } from './calc.js';
 import { uid, num, toast } from './util.js';
 
 export const CAT_COLORS = ['#22B573', '#FF8A4C', '#3D7BFA', '#F6B829', '#8B6CF6', '#F2559A', '#14B8C9', '#F15B5B', '#5B6CFF', '#E5A00D', '#7E8AA3', '#84C341'];
 const OLD_COLORS = ['#21A38A', '#F2865E', '#5B8DEF', '#E9B23C', '#9C7FE3', '#E35D7A', '#4CAF7D', '#2AA7C9', '#D46FB5', '#A98467', '#7D8C99', '#F0A04B'];
-export const CAT_ICONS = ['shopping-cart', 'fork-knife', 'car', 't-shirt', 'house-line', 'first-aid', 'popcorn', 'wifi', 'gift', 'dots-circle', 'coffee', 'airplane', 'baby', 'barbell', 'paw', 'book', 'lightning', 'graduation', 'gas', 'bus', 'heart', 'pill', 'scissors', 'game', 'tag'];
+export const CAT_ICONS = ['shopping-cart', 'fork-knife', 'car', 't-shirt', 'house-line', 'first-aid', 'popcorn', 'wifi', 'gift', 'dots-circle', 'coffee', 'airplane', 'baby', 'barbell', 'paw', 'book', 'lightning', 'graduation', 'gas', 'bus', 'heart', 'pill', 'scissors', 'game', 'arrow-u-up-left', 'tag'];
 const DEFAULT_CATS = [
   ['super', 'סופר ומכולת', 'shopping-cart', 30], ['food', 'אוכל בחוץ וקפה', 'fork-knife', 10], ['transport', 'רכב ותחבורה', 'car', 14],
   ['shopping', 'קניות וביגוד', 't-shirt', 9], ['home', 'בית', 'house-line', 8], ['health', 'בריאות ופארם', 'first-aid', 6],
-  ['fun', 'בילויים ופנאי', 'popcorn', 8], ['subs', 'מנויים ותקשורת', 'wifi', 4], ['gifts', 'מתנות', 'gift', 3], ['other', 'שונות', 'dots-circle', 8],
+  ['fun', 'בילויים ופנאי', 'popcorn', 8], ['subs', 'מנויים ותקשורת', 'wifi', 4], ['gifts', 'מתנות', 'gift', 3], ['refund', 'כסף שחזר', 'arrow-u-up-left', 0], ['other', 'שונות', 'dots-circle', 8],
 ];
 export function defaultSettings() {
   return {
     name: '', income: 0, startDay: 1, savings: { mode: 'percent', value: 10 }, goals: [], fixed: [], rules: {}, autoLockMin: 5,
-    categories: DEFAULT_CATS.map(([id, name, icon, weight], i) => ({ id, name, icon, weight, budget: 0, color: CAT_COLORS[i] })),
+    categories: DEFAULT_CATS.map(([id, name, icon, weight], i) => ({ id, name, icon, weight, budget: 0, color: id === 'refund' ? '#14B8C9' : CAT_COLORS[i] })),
   };
 }
 const str = (v, max = 80) => String(v ?? '').slice(0, max);
@@ -33,6 +33,12 @@ export function normalizeSettings(d) {
     id: str(c.id) || uid(), name: str(c.name, 40), icon: CAT_ICONS.includes(c.icon) ? c.icon : 'tag',
     budget: num(c.budget), weight: num(c.weight), color: OLD_COLORS.includes(String(c.color).toUpperCase()) ? CAT_COLORS[OLD_COLORS.indexOf(String(c.color).toUpperCase())] : /^#[0-9a-f]{6}$/i.test(c.color) ? c.color : CAT_COLORS[i % CAT_COLORS.length],
   }));
+  if (!s.categories.some(c => c.id === REFUND)) {
+    // added in 2.7 for existing users: sits just before "שונות"
+    const at = s.categories.findIndex(c => c.id === 'other');
+    s.categories.splice(at < 0 ? s.categories.length : at, 0, { id: REFUND, name: 'כסף שחזר', icon: 'arrow-u-up-left', budget: 0, weight: 0, color: '#14B8C9' });
+  }
+  for (const c of s.categories) if (c.id === REFUND) { c.budget = 0; c.weight = 0; c.color = '#14B8C9'; }
   if (!s.categories.some(c => c.id === 'other')) s.categories.push({ id: 'other', name: 'שונות', icon: 'dots-circle', budget: 0, weight: 0, color: '#7E8AA3' });
   if (d.rules && typeof d.rules === 'object') for (const [k, v] of Object.entries(d.rules)) s.rules[str(k, 80)] = str(v, 40);
   return s;

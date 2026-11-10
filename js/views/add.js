@@ -336,7 +336,7 @@ function renderReview(el) {
         <div class="rev-top"><b class="rev-name">${esc(r.merchant)}</b><b class="rev-amt">${money(r.amount, 'auto')}</b></div>
         <div class="rev-meta">${ic('calendar')}<span>${shortDate(r.date)}${r.time ? ' · ' + esc(r.time) : ''}</span>${r.place ? `<span>· ${esc(r.place)}</span>` : ''}${r.card ? `<span class="chip">${ic('card')}${esc(r.card)}</span>` : ''}
           ${r.dup ? `<span class="chip warn">${r.dup === 'saved' ? 'כבר שמורה' : 'בצילום אחר'}</span>` : ''}
-          ${r.fixedId ? `<span class="chip lilac">${ic('lock')}קבועה</span>` : ''}${r.kind === 'card-payment' ? `<span class="chip">${ic('card')}חיוב האשראי - לא נספר</span>` : ''}${r.kind === 'income' ? `<span class="chip good">הכנסה</span>` : ''}${r.kind === 'expense' && r.category === 'other' ? `<span class="chip warn">${ic('question')}בחר קטגוריה</span>` : r.auto ? `<span class="chip good">${ic('sparkle')}סווג לבד</span>` : ''}${r.installment ? `<span class="chip">תשלום ${esc(r.installment)}</span>` : ''}
+          ${r.fixedId ? `<span class="chip lilac">${ic('lock')}קבועה</span>` : ''}${r.kind === 'card-payment' ? `<span class="chip">${ic('card')}חיוב האשראי - לא נספר</span>` : ''}${r.kind === 'income' ? `<span class="chip good">הכנסה</span>` : ''}${r.kind === 'expense' && r.category === 'refund' ? `<span class="chip back">${ic('arrow-u-up-left')}חזר · לא נספר</span>` : ''}${r.kind === 'expense' && r.category === 'other' ? `<span class="chip warn">${ic('question')}בחר קטגוריה</span>` : r.auto ? `<span class="chip good">${ic('sparkle')}סווג לבד</span>` : ''}${r.installment ? `<span class="chip">תשלום ${esc(r.installment)}</span>` : ''}
           ${r.foreign ? `<span class="chip peach">מט"ח</span>` : ''}${r.guessed ? `<span class="chip warn">בדוק תאריך</span>` : ''}${r.amount < 0 ? `<span class="chip good">זיכוי</span>` : ''}</div>
         <div class="rev-cat" ${r.kind === 'expense' ? '' : 'hidden'}><select data-k="category" aria-label="קטגוריה">${catOptions(r.category)}</select></div>
         <details class="rev-edit"><summary>${ic('pencil')}תיקון</summary><div class="rev-f">
@@ -403,9 +403,10 @@ function rebuildFromFile(el) {
 }
 function sum(el) {
   const on = review.rows.filter(r => r.on);
-  const exp = on.filter(r => r.kind === 'expense').reduce((a, r) => a + num(r.amount), 0);
+  const back = r => r.kind === 'expense' && r.category === 'refund';
+  const exp = on.filter(r => r.kind === 'expense' && !back(r)).reduce((a, r) => a + num(r.amount), 0);
   const inc = on.filter(r => r.kind === 'income').reduce((a, r) => a + num(r.amount), 0);
-  const skip = on.filter(r => r.kind === 'card-payment').length;
+  const skip = on.filter(r => r.kind === 'card-payment' || back(r)).length;
   $('#rv-sum', el).innerHTML = `<b>${on.length}</b> לשמירה${exp ? ` · הוצאות ${money(exp)}` : ''}${inc ? ` · הכנסות ${money(inc)}` : ''}${skip ? ` · ${skip} לא נספרות` : ''}`;
   $('#rv-save', el).disabled = !on.length && !review.cardFixes;
 }
@@ -413,7 +414,7 @@ function save(el) {
   const now = Date.now();
   const chosen = review.rows.filter(r => r.on && r.merchant && num(r.amount) && /^\d{4}-\d{2}-\d{2}$/.test(r.date));
   let learned = false;
-  for (const r of chosen) if (r.touched && r.kind === 'expense') { state.settings.rules[normMerchant(r.merchant)] = r.category; learned = true; }
+  for (const r of chosen) if (r.touched && r.kind === 'expense' && r.category !== 'refund') { state.settings.rules[normMerchant(r.merchant)] = r.category; learned = true; }
   if (learned) persist();
   upsertTx(chosen.map((r, i) => ({ id: r.id, date: r.date, time: /^\d{2}:\d{2}$/.test(r.time || '') ? r.time : null, merchant: cleanField(r.merchant), place: cleanField(r.place, 40),
     card: /^\d{4}$/.test(r.card || '') ? r.card : null, amount: num(r.amount), kind: r.kind, category: r.category, fixedId: r.kind === 'expense' ? r.fixedId : null, installment: r.installment,

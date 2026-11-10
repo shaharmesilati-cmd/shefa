@@ -25,7 +25,10 @@ export function savingsAmount(settings, income) {
   const s = settings.savings || { mode: 'percent', value: 0 };
   return s.mode === 'percent' ? Math.round(income * (Number(s.value) || 0) / 100) : (Number(s.value) || 0);
 }
-export const isCounted = t => !t.ignored && t.kind !== 'income' && t.kind !== 'card-payment';
+/** "כסף שחזר": a purchase whose money came back (a return, a refund). It stays in the list but is not counted as spent. */
+export const REFUND = 'refund';
+export const isRefund = t => t.category === REFUND && t.kind !== 'income' && t.kind !== 'card-payment';
+export const isCounted = t => !t.ignored && t.kind !== 'income' && t.kind !== 'card-payment' && t.category !== REFUND;
 const sum = (list, f = t => t.amount) => list.reduce((a, t) => a + (Number(f(t)) || 0), 0);
 
 /**
@@ -71,22 +74,24 @@ export function monthSummary(settings, allTx, key, today = new Date()) {
   const known = new Set((settings.categories || []).map(c => c.id));
   const catOf = t => (t.category && (!known.size || known.has(t.category)) ? t.category : 'other');
   for (const t of variable) byCat[catOf(t)] = (byCat[catOf(t)] || 0) + t.amount;
-  const allocated = sum(settings.categories || [], c => c.budget);
+  const allocated = sum((settings.categories || []).filter(c => c.id !== REFUND), c => c.budget);
   const fixedSeen = new Set(counted.filter(t => t.fixedId).map(t => t.fixedId));
+  const back = inPeriod.filter(t => isRefund(t) && !t.ignored);
+  const refunded = sum(back.filter(t => t.amount > 0));
 
   return {
     key, inPeriod, variable, plannedIncome, actualIncome, income, fixedTotal, savings, available, spent, remaining,
     start, end, total, elapsed, daysLeft, daily, weekly, expectedByNow, status, isCurrent, projectedEnd,
-    byCat, allocated, unallocated: available - allocated, fixedSeen,
+    byCat, allocated, unallocated: available - allocated, fixedSeen, refunded, refundCount: back.length,
   };
 }
 
 /** Split `available` across categories by their weights, in round tens; the rounding rest goes to `other`. */
 export function autoSplit(categories, available) {
   if (!(available > 0)) return categories.map(c => ({ ...c }));
-  let w = categories.map(c => Number(c.weight) || 0);
+  let w = categories.map(c => (c.id === REFUND ? 0 : Number(c.weight) || 0));
   let W = w.reduce((a, b) => a + b, 0);
-  if (!W) { w = w.map(() => 1); W = w.length; }
+  if (!W) { w = categories.map(c => (c.id === REFUND ? 0 : 1)); W = w.reduce((a, b) => a + b, 0) || 1; }
   const out = categories.map((c, i) => ({ ...c, budget: Math.floor(available * w[i] / W / 10) * 10 }));
   const used = out.reduce((a, c) => a + c.budget, 0);
   const rest = out.find(c => c.id === 'other') || out[out.length - 1];

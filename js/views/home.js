@@ -147,11 +147,13 @@ function classify(id, catId, skipped = false) {
   const t = state.tx.find(x => x.id === id); if (!t) return;
   const generic = isGenericMerchant(t.merchant);
   const n = normMerchant(t.merchant);
-  const list = generic ? [t] : state.tx.filter(x => x.kind === 'expense' && (x.id === t.id || ((x.category || 'other') === 'other' && !x.confirmed && sameBusiness(x.merchant, t.merchant))));
-  if (!generic && catId !== 'other') { state.settings.rules[n] = catId; persist(); }
+  // "כסף שחזר" is about this one purchase - never spread to other purchases or learned for the shop
+  const one = generic || catId === 'refund';
+  const list = one ? [t] : state.tx.filter(x => x.kind === 'expense' && (x.id === t.id || ((x.category || 'other') === 'other' && !x.confirmed && sameBusiness(x.merchant, t.merchant))));
+  if (!one && catId !== 'other') { state.settings.rules[n] = catId; persist(); }
   upsertTx(list.map(x => ({ ...x, category: catId, confirmed: true })));
   changed();
-  toast(skipped ? 'נשאר בשונות. אפשר לשנות בכל רגע ברשימת התנועות.' : catId === 'other' ? 'סווג ל"שונות"' : `סווג ל"${catById(catId).name}"${list.length > 1 ? ` (${list.length} קניות)` : ''}${generic ? '' : ' · נלמד לפעם הבאה'}`);
+  toast(skipped ? 'נשאר בשונות. אפשר לשנות בכל רגע ברשימת התנועות.' : catId === 'other' ? 'סווג ל"שונות"' : catId === 'refund' ? `סומן ככסף שחזר. ₪${fmt0(t.amount)} לא נספרים יותר כהוצאה.` : `סווג ל"${catById(catId).name}"${list.length > 1 ? ` (${list.length} קניות)` : ''}${generic ? '' : ' · נלמד לפעם הבאה'}`);
 }
 
 function wire(el, cats) {
@@ -229,6 +231,7 @@ function openAnalysis() {
   if (I.stats) parts.push(`<div class="tiles"><div class="tile t-orange"><span>${ic('receipt')}הקנייה הגדולה</span><b>${money(I.stats.biggest.amount)}</b><small>${esc(I.stats.biggest.merchant)}</small></div>
     <div class="tile t-blue"><span>${ic('coins')}מובילה</span><b>${money(I.stats.topCat.amount)}</b><small>${esc(I.stats.topCat.name)}</small></div>
     <div class="tile t-green"><span>${ic('calendar')}ליום</span><b>${money(I.stats.perDay)}</b><small>${I.stats.count} קניות</small></div></div>`);
+  if (C.refunded > 0) parts.push(`<div class="ins good">${ic('arrow-u-up-left')}<p>חזרו לך החודש ${money(C.refunded, 'auto')} (${C.refundCount === 1 ? 'קנייה אחת' : C.refundCount + ' קניות'}). הן מופיעות ברשימה אבל לא נספרות כהוצאה.</p></div>`);
   if (I.list.length) parts.push(`<h3>שמנו לב</h3><div class="insights">${I.list.map(x => `<div class="ins ${x.tone}">${ic(x.icon)}<p>${esc(x.text)}</p></div>`).join('')}</div>`);
   const slices = S.categories.map(c => ({ c, v: Math.max(0, C.byCat[c.id] || 0) })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
   const tot = slices.reduce((a, x) => a + x.v, 0);

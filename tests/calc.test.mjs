@@ -196,3 +196,32 @@ console.log('v1.2 tests passed');
   assert.ok(redactSensitive('פגישה 15-10-2026 ב-14:00').text.includes('15-10-2026'), 'a dashed date is not an account');
   console.log('v2.6 privacy tests passed');
 }
+
+// v2.7 - "כסף שחזר": stays in the list, not counted as spent, never learned for the shop
+{
+  const { monthSummary, isCounted, autoSplit } = await import('../js/calc.js');
+  const { normalizeSettings, defaultSettings } = await import('../js/store.js').catch(() => ({}));
+  const { classify, historyOf } = await import('../js/categorize.js');
+  const S = { income: 10000, startDay: 1, savings: { mode: 'fixed', value: 0 }, fixed: [], categories: [{ id: 'shopping', budget: 0, weight: 1 }, { id: 'refund', budget: 0, weight: 0 }, { id: 'other', budget: 0, weight: 1 }] };
+  const tx = [
+    { id: 'a', date: '2026-11-03', merchant: 'זארה', amount: 400, kind: 'expense', category: 'shopping' },
+    { id: 'b', date: '2026-11-04', merchant: 'זארה', amount: 250, kind: 'expense', category: 'refund' },
+  ];
+  const C = monthSummary(S, tx, '2026-11', new Date(2026, 10, 10));
+  assert.equal(C.spent, 400, 'a refunded purchase is not spent');
+  assert.equal(C.refunded, 250); assert.equal(C.refundCount, 1);
+  assert.equal(C.inPeriod.length, 2, 'it stays in the month');
+  assert.equal(C.byCat.refund, undefined, 'no category total for refunds');
+  assert.equal(isCounted(tx[1]), false);
+  const split = autoSplit(S.categories, 1000);
+  assert.equal(split.find(c => c.id === 'refund').budget, 0, 'auto split gives refund nothing');
+  assert.equal(split.reduce((a, c) => a + c.budget, 0), 1000);
+  const r = classify('זארה', { rules: { 'זארה': 'refund' }, ids: new Set(['shopping', 'refund', 'other']), history: historyOf(tx) });
+  assert.notEqual(r.cat, 'refund', 'refund is never guessed automatically');
+  if (normalizeSettings) {
+    const old = normalizeSettings({ categories: [{ id: 'super', name: 'סופר', icon: 'shopping-cart' }, { id: 'other', name: 'שונות', icon: 'dots-circle' }] });
+    assert.deepEqual(old.categories.map(c => c.id), ['super', 'refund', 'other'], 'existing users get the new category before שונות');
+    assert.equal(old.categories[1].icon, 'arrow-u-up-left');
+  }
+  console.log('v2.7 refund tests passed');
+}

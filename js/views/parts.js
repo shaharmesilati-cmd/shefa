@@ -10,16 +10,17 @@ export function txRow(t) {
   const c = catById(t.category);
   const f = t.fixedId && state.settings.fixed.find(x => x.id === t.fixedId);
   const kind = t.kind === 'income' ? `<span class="chip good">${ic('arrow-down')}הכנסה</span>`
-    : t.kind === 'card-payment' ? `<span class="chip">${ic('card')}לא נספר</span>` : '';
+    : t.kind === 'card-payment' ? `<span class="chip">${ic('card')}לא נספר</span>`
+    : t.category === 'refund' ? `<span class="chip back">${ic('arrow-u-up-left')}חזר · לא נספר</span>` : '';
   const isIncome = t.kind === 'income';
   return `<button class="tx" data-tx="${esc(t.id)}" type="button">
     ${isIncome ? `<span class="cat-ic" style="--c:#21A38A">${ic('hand-coins')}</span>` : catIcon(c)}
     <span class="tx-mid"><span class="tx-m">${esc(t.merchant)}</span>
-      <span class="tx-s"><span>${shortDate(t.date)}${t.time ? ' · ' + esc(t.time) : ''}</span>${t.place ? `<span>${esc(t.place)}</span>` : ''}${t.card ? `<span class="chip">${ic('card')}${esc(t.card)}</span>` : ''}${isIncome || t.kind === 'card-payment' ? '' : `<span>${esc(c.name)}</span>`}
+      <span class="tx-s"><span>${shortDate(t.date)}${t.time ? ' · ' + esc(t.time) : ''}</span>${t.place ? `<span>${esc(t.place)}</span>` : ''}${t.card ? `<span class="chip">${ic('card')}${esc(t.card)}</span>` : ''}${isIncome || t.kind === 'card-payment' || t.category === 'refund' ? '' : `<span>${esc(c.name)}</span>`}
       ${kind}${f ? `<span class="chip lilac">${ic('lock')}קבועה</span>` : ''}
       ${t.installment ? `<span class="chip">תשלום ${esc(t.installment)}</span>` : ''}
       ${t.foreign ? `<span class="chip peach">מט"ח</span>` : ''}</span></span>
-    <span class="tx-a ${isIncome || t.amount < 0 ? 'pos' : ''} ${t.kind === 'card-payment' ? 'dim' : ''}">${isIncome ? '+' : ''}${money(t.amount, 'auto')}</span>
+    <span class="tx-a ${isIncome || t.amount < 0 ? 'pos' : ''} ${t.kind === 'card-payment' ? 'dim' : t.category === 'refund' && !isIncome ? 'back' : ''}">${isIncome ? '+' : ''}${money(t.amount, 'auto')}</span>
   </button>`;
 }
 
@@ -57,7 +58,7 @@ export function openTxSheet(t) {
       if (!merchant || !amount || !/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast('צריך למלא שם, סכום ותאריך'); return; }
       if (amount < 0) { toast('סכום לא יכול להיות שלילי. החזר כספי? בחר סוג "הכנסה".'); return; }
       const kind = $('#sh-k', sh).value, cat = $('#sh-c', sh).value;
-      if (kind === 'expense' && (isNew || cat !== t.category)) { state.settings.rules[normMerchant(merchant)] = cat; persist(); }
+      if (kind === 'expense' && cat !== 'refund' && (isNew || cat !== t.category)) { state.settings.rules[normMerchant(merchant)] = cat; persist(); }
       const time = $('#sh-t', sh).value, place = cleanField($('#sh-p', sh).value, 40);
       const c4 = $('#sh-c4', sh).value.replace(/\D/g, '');
       if (c4 && c4.length !== 4) { toast('בכרטיס רושמים בדיוק 4 ספרות'); return; }
