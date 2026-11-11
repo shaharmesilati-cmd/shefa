@@ -126,7 +126,16 @@ export function dailyBank(settings, allTx, key, today = new Date()) {
     tomorrow: C.daysLeft > 1 ? r2(t.closed + base) : null,
     recoverDays: t.closed < 0 ? Math.ceil(-t.closed / base) : 0, recoverable: t.closed >= 0 || Math.ceil(-t.closed / base) < C.daysLeft,
     zeroDays, days, daysLeft: C.daysLeft, day: C.elapsed, total: C.total,
+    maxEnd: r2(t.closed + base * (C.daysLeft - 1)), // the most the bank can reach by the end of the month
   };
+}
+const BANK_STEPS = [250, 500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000, 15000, 20000, 30000, 50000];
+/** The next round number the bank can reach, and how far along it is. */
+export function bankMilestone(balance, maxEnd, base) {
+  const next = BANK_STEPS.find(s => s > balance) || null;
+  const prev = [...BANK_STEPS].reverse().find(s => s <= balance) || 0;
+  const pct = next ? Math.max(0, Math.min(1, (balance - prev) / (next - prev))) : 1;
+  return { prev, next, pct, reachable: next != null && next <= maxEnd + 0.5, days: next && base > 0 ? Math.ceil((next - balance) / base) : null };
 }
 
 /** Split `available` across categories by their weights, in round tens; the rounding rest goes to `other`. */

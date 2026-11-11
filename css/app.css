@@ -450,7 +450,7 @@ body { background: #FFFFFF; }
 .bk-sim { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 16px; background: var(--surface-2); }
 .bk-sim label { font-size: .92rem; font-weight: 600; }
 .bk-sim input[type=range] { width: 100%; min-height: 44px; padding: 0; border: 0; background: transparent; box-shadow: none; accent-color: var(--primary); direction: ltr; }
-.bk-out { display: flex; align-items: flex-start; gap: 6px; font-size: .88rem; font-weight: 600; color: var(--ink); min-height: 2.6em; }
+.bk-out { font-size: .88rem; font-weight: 600; color: var(--ink); min-height: 2.6em; }
 .bk-out.good { color: var(--good); } .bk-out.warn { color: #9A6B00; } .bk-out.bad { color: #C2531B; }
 .fc { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; font-weight: 600; padding: 5px 12px; border-radius: 999px; }
 .fc.ok { background: var(--green-soft); color: var(--good); } .fc.bad { background: var(--orange-soft); color: #C2531B; }
@@ -555,3 +555,36 @@ body { background: #FFFFFF; }
   .crow .icon-btn { width: 36px; }
   .crow input[type=text] { padding-inline: 8px; }
 }
+
+/* the coin jar */
+.jar-row { display: flex; gap: 14px; align-items: center; }
+.jar { position: relative; flex: none; width: 138px; min-height: 150px; padding: 16px 10px 10px; border: 3px solid #D9E2EF; border-top-width: 0; border-radius: 10px 10px 30px 30px; background: linear-gradient(180deg, #FAFCFF, #F1F6FD); display: grid; align-content: end; cursor: pointer; font: inherit; -webkit-tap-highlight-color: transparent; }
+.jar-lid { position: absolute; top: -7px; inset-inline: -9px; height: 12px; border-radius: 8px; background: #C9D4E5; }
+.jar.empty { border-color: #F3D2BF; background: linear-gradient(180deg, #FFFBF8, #FFF3EA); } .jar.empty .jar-lid { background: #F0BFA3; }
+.jar-in { display: flex; flex-wrap: wrap-reverse; align-content: flex-start; gap: 3px; width: 100%; direction: ltr; }
+.jar-x { position: absolute; top: 14px; inset-inline-end: 10px; font-size: .74rem; font-weight: 800; color: #9A6B00; background: var(--yellow-soft); padding: 1px 7px; border-radius: 999px; direction: ltr; }
+.coin { width: 20px; height: 20px; border-radius: 50%; flex: none; background: radial-gradient(circle at 35% 30%, #FFE08A, #F6B829 60%, #D99A12); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .45), 0 1px 0 #C48A0C; transition: opacity .2s, transform .2s; }
+.coin.part { clip-path: inset(calc(100% - var(--p)) 0 0 0); }
+.coin.gone { background: none; box-shadow: inset 0 0 0 2px #F3C9B0; opacity: .9; }
+.coin.debt { background: none; box-shadow: none; border: 2px dashed #FF8A4C; }
+.coin.next { background: none; box-shadow: none; border: 2px dashed var(--green); animation: nextc 1.8s ease-in-out infinite; }
+@keyframes nextc { 50% { transform: translateY(-3px); opacity: .55; } }
+.jar.fresh .coin:not(.next):nth-last-child(2), .jar.fresh .coin:not(.next):last-child { animation: drop .9s cubic-bezier(.3, 1.4, .5, 1) .5s both; }
+@keyframes drop { 0% { transform: translateY(-150px) rotate(-80deg); opacity: 0; } 60% { opacity: 1; } 80% { transform: translateY(3px); } 100% { transform: none; } }
+.jar.shake { animation: jshake .5s ease; } .jar.shake .coin { animation: cjig .5s ease; } .jar.shake .coin:nth-child(2n) { animation-direction: reverse; }
+@keyframes jshake { 20% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } 80% { transform: rotate(-2deg); } }
+@keyframes cjig { 30% { transform: translateY(-4px) rotate(18deg); } 60% { transform: translateY(1px) rotate(-10deg); } }
+.jar-side { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.jr-head { font-size: 1.05rem; } .jr-head.t-warn { color: #C2531B; }
+.jr-line { font-size: .86rem; font-weight: 600; }
+.jr-line > svg, .bk-out > svg, .bk-info > svg { vertical-align: -3px; margin-inline-end: 5px; }
+.pledge-btn { align-self: stretch; justify-content: center; background: var(--primary-soft); color: var(--primary); border-color: transparent; font-weight: 700; }
+.pledge { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 14px; font-size: .88rem; }
+.pledge.on { background: var(--green-soft); color: #14784A; } .pledge.off { background: var(--surface-2); color: var(--muted); }
+.bk-info.morning { color: var(--ink); background: var(--yellow-soft); padding: 10px 12px; border-radius: 14px; }
+.wish { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); font: inherit; color: var(--ink); text-align: start; cursor: pointer; }
+.wish-ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--yellow-soft); color: #9A6B00; }
+.wish-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; } .wish-mid small { color: var(--muted); font-size: .8rem; }
+.wish-add { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; min-height: 44px; }
+@media (max-width: 370px) { .jar { width: 116px; } }
+@media (prefers-reduced-motion: reduce) { .jar.fresh .coin, .jar.shake, .jar.shake .coin, .coin.next, .h-plus { animation: none !important; } }

@@ -27,6 +27,11 @@ export function normalizeSettings(d) {
   s.autoLockMin = [1, 5, 15, 30].includes(+d.autoLockMin) ? +d.autoLockMin : 5;
   s.lastBackup = Number(d.lastBackup) || 0;
   s.byCharge = d.byCharge === true;
+  const bk = d.bank && typeof d.bank === 'object' ? d.bank : {};
+  s.bank = { key: /^\d{4}-\d{2}$/.test(bk.key || '') ? bk.key : '', best: Number(bk.best) || 0, hit: Array.isArray(bk.hit) ? bk.hit.map(Number).filter(n => n > 0).slice(0, 20) : [],
+    pledge: validISO(bk.pledge) ? bk.pledge : null, wins: Math.max(0, Math.floor(Number(bk.wins) || 0)) };
+  const w = d.wish && typeof d.wish === 'object' ? d.wish : null;
+  s.wish = w && Number(w.price) > 0 ? { name: String(w.name || '').trim().slice(0, 40) || 'המשאלה שלי', price: Math.round(Number(w.price)) } : null;
   if (d.savings) s.savings = { mode: d.savings.mode === 'fixed' ? 'fixed' : 'percent', value: num(d.savings.value) };
   if (Array.isArray(d.goals)) s.goals = d.goals.map(g => ({ id: str(g.id) || uid(), name: str(g.name), target: num(g.target), monthly: num(g.monthly), saved: num(g.saved) }));
   if (Array.isArray(d.fixed)) s.fixed = d.fixed.map(f => ({ id: str(f.id) || uid(), name: str(f.name), amount: num(f.amount), keyword: str(f.keyword, 40) }));

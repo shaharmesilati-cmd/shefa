@@ -298,3 +298,21 @@ console.log('v1.2 tests passed');
   assert.equal(B.balance, 200);
   console.log('v3.0 daily bank tests passed');
 }
+
+// v3.1 - bank milestones and what the app remembers about the bank
+{
+  const { bankMilestone, dailyBank } = await import('../js/calc.js');
+  const { normalizeSettings } = await import('../js/store.js');
+  let M = bankMilestone(620, 3000, 100);
+  assert.deepEqual([M.prev, M.next, M.reachable, M.days], [500, 1000, true, 4]);
+  assert.equal(Math.round(M.pct * 100), 24);
+  assert.equal(bankMilestone(620, 900, 100).reachable, false, 'a milestone the month cannot reach is not promised');
+  assert.equal(bankMilestone(-50, 900, 100).prev, 0);
+  const B = dailyBank({ income: 3000, startDay: 1, savings: { mode: 'fixed', value: 0 }, fixed: [], categories: [] }, [], '2026-11', new Date(2026, 10, 4, 9));
+  assert.equal(B.maxEnd, 3000, 'without spending, the whole month stays');
+  const s = normalizeSettings({ bank: { key: '2026-11', best: 620, hit: [250, 500, 'x'], pledge: '2026-11-10', wins: 2 }, wish: { name: ' אוזניות ', price: '600' } });
+  assert.deepEqual(s.bank, { key: '2026-11', best: 620, hit: [250, 500], pledge: '2026-11-10', wins: 2 });
+  assert.deepEqual(s.wish, { name: 'אוזניות', price: 600 });
+  assert.equal(normalizeSettings({ wish: { name: 'x', price: 0 } }).wish, null);
+  console.log('v3.1 bank extras tests passed');
+}
