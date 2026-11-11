@@ -94,6 +94,41 @@ export function monthSummary(settings, allTx, key, today = new Date()) {
   };
 }
 
+/**
+ * The daily "bank". Every day of the month adds the same daily amount (the month's spending money / days).
+ * What you did not spend stays and rolls to the next day; spending more than you have puts the bank in minus.
+ * Returns null when the month is not the current one or there is no spending money.
+ */
+export function dailyBank(settings, allTx, key, today = new Date()) {
+  const C = monthSummary(settings, allTx, key, today);
+  if (!C.isCurrent || !(C.available > 0)) return null;
+  const base = C.available / C.total;
+  const startIso = isoOf(C.start), todayIso = isoOf(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
+  const byDay = {};
+  for (const t of C.variable) {
+    // purchases dated outside the days that already passed (charge-month mode, a future date) sit on the nearest day
+    const d = t.date < startIso ? startIso : t.date > todayIso ? todayIso : t.date;
+    byDay[d] = (byDay[d] || 0) + t.amount;
+  }
+  const days = []; let cum = 0, zeroDays = 0;
+  for (let i = 1; i <= C.elapsed; i++) {
+    const iso = isoOf(new Date(C.start.getFullYear(), C.start.getMonth(), C.start.getDate() + i - 1));
+    const spent = byDay[iso] || 0, opened = base * i - cum;
+    cum += spent;
+    if (!spent && iso !== todayIso) zeroDays++;
+    days.push({ iso, spent, opened, closed: base * i - cum, net: base - spent });
+  }
+  const t = days[days.length - 1], prev = days[days.length - 2];
+  const r2 = v => Math.round(v * 100) / 100;
+  return {
+    base: r2(base), balance: r2(t.closed), morning: r2(t.opened), spentToday: r2(t.spent),
+    rolled: r2(t.opened - base), yesterday: prev ? r2(prev.closed) : 0, yesterdaySpent: prev ? r2(prev.spent) : null,
+    tomorrow: C.daysLeft > 1 ? r2(t.closed + base) : null,
+    recoverDays: t.closed < 0 ? Math.ceil(-t.closed / base) : 0, recoverable: t.closed >= 0 || Math.ceil(-t.closed / base) < C.daysLeft,
+    zeroDays, days, daysLeft: C.daysLeft, day: C.elapsed, total: C.total,
+  };
+}
+
 /** Split `available` across categories by their weights, in round tens; the rounding rest goes to `other`. */
 export function autoSplit(categories, available) {
   if (!(available > 0)) return categories.map(c => ({ ...c }));

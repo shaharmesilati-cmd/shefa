@@ -2,7 +2,7 @@
 // Below it: ONE next step, the savings goal with your streak, top categories, last purchases.
 // Everything else (charts, comparisons) lives behind "ניתוח החודש".
 import { state, catById, upsertTx, persist, changed, addCategory } from '../store.js';
-import { monthSummary, shiftKey, normMerchant } from '../calc.js';
+import { monthSummary, shiftKey, normMerchant, dailyBank, isoOf } from '../calc.js';
 import { $, $$, esc, ic, money, fmt0, MONTHS, openSheet, toast, shortDate } from '../util.js';
 import { txRow, catIcon } from './parts.js';
 import { monthInsights, needsCategory, isGenericMerchant, budgetStreak } from '../insights.js';
@@ -46,17 +46,40 @@ export function render(el) {
   const sub = C.remaining < 0 ? 'מהיום כל שקל שנחסך מצמצם את החריגה'
     : past || future ? `${C.total} ימים · תקציב ${money(C.available)}`
     : `נשאר לחודש ${money(C.remaining)} · ${C.daysLeft} ימים`;
-  const fc = C.isCurrent && C.elapsed >= 5 && C.available > 0
+  let fc = C.isCurrent && C.elapsed >= 5 && C.available > 0
     ? (C.projectedEnd >= 0 ? `<span class="fc ok">${ic('trend-up')}בקצב הזה תסיים עם עודף של ${money(C.projectedEnd)}</span>`
       : `<span class="fc bad">${ic('trend-down')}בקצב הזה תחרוג בכ-${money(-C.projectedEnd)}</span>`) : '';
-  parts.push(`<section class="hero2 ${C.status}">
+  // the daily bank: today's number is what piled up until today, minus what was already spent
+  const B = C.remaining >= 0 ? dailyBank(S, state.tx, key) : null;
+  let hb = { label, big, sub, cls: C.status, from: null, fresh: false };
+  if (B) {
+    const minus = B.balance < 0;
+    hb.big = B.balance; hb.label = minus ? 'הקופה היומית במינוס' : 'אפשר להוציא היום';
+    hb.cls = minus ? 'watch minus' : C.status;
+    hb.sub = minus
+      ? (B.recoverable ? `בלי הוצאות, חוזרים לפלוס בעוד ${B.recoverDays === 1 ? 'יום אחד' : B.recoverDays + ' ימים'} · כל יום מוסיף ${money(B.base)}`
+        : `כל יום מוסיף ${money(B.base)} · כל שקל שלא יוצא מקטין את המינוס`)
+      : B.rolled > 0.5 ? `${money(B.base)} של היום + ${money(B.rolled)} שצברת מימים קודמים`
+      : B.rolled < -0.5 ? `${money(B.base)} של היום, פחות ${money(-B.rolled)} שיצאו מעבר בימים קודמים`
+      : `${money(B.base)} נכנסים לקופה בכל יום`;
+    fc = B.tomorrow != null ? `<span class="fc ${B.tomorrow >= 0 ? 'ok' : 'bad'}">${ic('sun')}${B.spentToday ? 'בלי עוד הוצאות היום,' : 'לא מוציא היום?'} מחר ${B.tomorrow >= 0 ? `יהיו לך ${money(B.tomorrow)}` : `המינוס יירד ל-${money(-B.tomorrow)}`}</span>`
+      : `<span class="fc ok">${ic('piggy')}היום האחרון של החודש. מה שנשאר, נשאר אצלך.</span>`;
+    // first look today: the number climbs from where yesterday ended
+    const todayIso = isoOf(new Date()); let seen = null;
+    try { seen = localStorage.getItem('stashwise-bank-day'); localStorage.setItem('stashwise-bank-day', todayIso); } catch { }
+    if (seen !== todayIso && B.day > 1 && !B.spentToday) { hb.from = B.yesterday; hb.fresh = true; }
+  }
+  parts.push(`<section class="hero2 ${hb.cls}">
     <div class="ring-wrap">
       <svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-bg" cx="60" cy="60" r="${R}"></circle>
         <circle class="ring-fg" cx="60" cy="60" r="${R}" stroke-dasharray="${CIRC.toFixed(1)}" stroke-dashoffset="${(CIRC * (1 - left)).toFixed(1)}"></circle></svg>
-      <div class="ring-in"><span class="h-lbl">${label}</span><b class="h-big" data-count="${Math.round(big)}">${money(big)}</b></div>
+      <div class="ring-in"><span class="h-lbl">${hb.label}</span><b class="h-big" data-count="${Math.round(hb.big)}"${hb.from != null ? ` data-from="${Math.round(hb.from)}"` : ''}>${money(hb.big)}</b>
+        ${hb.fresh ? `<span class="h-plus">+${money(B.base)} הבוקר</span>` : B ? `<span class="h-day">יום ${B.day} מתוך ${B.total}</span>` : ''}</div>
     </div>
-    <p class="h-sub">${sub}</p>${fc}
+    <p class="h-sub">${hb.sub}</p>${fc}
+    ${B ? `<p class="h-month">נשאר לחודש ${money(C.remaining)} · ${C.daysLeft} ימים</p>` : ''}
   </section>`);
+  if (B) parts.push(bankCard(B));
 
   // one next step
   parts.push(nextStep(S, C, key));
@@ -91,7 +114,52 @@ export function render(el) {
 
   el.innerHTML = parts.join('');
   wire(el, cats);
+  wireBank(el, B);
   countUp(el);
+}
+
+const WD = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+const wdOf = iso => WD[new Date(iso + 'T12:00').getDay()];
+/** The last days of the bank as small coins, and a "what if" slider for today. */
+function bankCard(B) {
+  const days = B.days.slice(-7), top = Math.max(B.base, ...days.map(d => d.spent)) || 1;
+  const max = Math.max(50, Math.ceil(Math.max(B.balance, B.base) * 1.5 / 10) * 10);
+  return `<section class="card bank" data-base="${B.base}" data-bal="${B.balance}" data-last="${B.tomorrow == null ? 1 : 0}">
+    <div class="card-h"><h2>${ic('coins')}הקופה היומית</h2>${B.zeroDays ? `<span class="badge zero">${ic('plant')}${B.zeroDays === 1 ? 'יום אחד' : B.zeroDays + ' ימים'} בלי הוצאה</span>` : ''}</div>
+    <div class="bk-days" role="list">${days.map((d, i) => {
+      const today = i === days.length - 1, cls = !d.spent ? (today ? 'today' : 'zero') : d.spent <= B.base ? 'under' : 'over';
+      return `<button type="button" class="bk-day ${cls}${today ? ' is-today' : ''}" role="listitem" data-day="${d.iso}" aria-label="יום ${wdOf(d.iso)} ${shortDate(d.iso)}">
+        <span class="bk-col"><i style="height:${Math.max(6, Math.min(100, d.spent / top * 100)).toFixed(0)}%"></i></span>
+        <b class="num">${!d.spent ? (today ? '·' : '+' + fmt0(B.base)) : (d.net >= 0 ? '+' : '-') + fmt0(Math.abs(d.net))}</b><small>${today ? 'היום' : wdOf(d.iso) + "'"}</small></button>`; }).join('')}</div>
+    <p class="bk-info" id="bk-info" aria-live="polite">כל יום ${money(B.base)} נכנסים לקופה. מה שלא הוצאת נשאר ועובר ליום הבא. לחץ על יום כדי לראות מה קרה בו.</p>
+    ${B.tomorrow != null ? `<div class="bk-sim"><label for="bk-range">ואם אוציא היום ${B.spentToday ? 'עוד ' : ''}<b id="bk-x" class="num">₪0</b>?</label>
+      <input type="range" id="bk-range" min="0" max="${max}" step="5" value="0">
+      <p id="bk-out" class="bk-out"></p></div>` : ''}
+  </section>`;
+}
+function wireBank(el, B) {
+  const card = $('.bank', el); if (!card || !B) return;
+  const info = $('#bk-info', card);
+  card.querySelectorAll('[data-day]').forEach(b => b.onclick = () => {
+    const d = B.days.find(x => x.iso === b.dataset.day); if (!d) return;
+    card.querySelectorAll('.bk-day').forEach(x => x.classList.toggle('sel', x === b));
+    const when = b.classList.contains('is-today') ? 'היום' : `יום ${wdOf(d.iso)}' ${shortDate(d.iso)}`;
+    info.innerHTML = !d.spent ? `<b>${when}:</b> ${b.classList.contains('is-today') ? 'עוד לא הוצאת כלום.' : 'לא הוצאת כלום.'} כל ה-${money(B.base)} ${b.classList.contains('is-today') ? 'עדיין' : 'נשארו'} בקופה. הקופה ${b.classList.contains('is-today') ? 'עומדת על' : 'נסגרה על'} ${money(d.closed)}.`
+      : d.net >= 0 ? `<b>${when}:</b> הוצאת ${money(d.spent, 'auto')} מתוך ${money(B.base)}. ${money(d.net)} נשארו ועברו הלאה. הקופה ${b.classList.contains('is-today') ? 'עומדת על' : 'נסגרה על'} ${money(d.closed)}.`
+      : `<b>${when}:</b> הוצאת ${money(d.spent, 'auto')}, שזה ${money(-d.net)} מעבר ליומי. הקופה ${b.classList.contains('is-today') ? 'עומדת על' : 'נסגרה על'} ${money(d.closed)}.`;
+  });
+  const r = $('#bk-range', card); if (!r) return;
+  const out = $('#bk-out', card), x = $('#bk-x', card);
+  const show = () => {
+    const v = +r.value, tom = B.balance - v + B.base, today = B.balance - v;
+    x.textContent = '₪' + fmt0(v);
+    out.className = 'bk-out ' + (tom < 0 ? 'bad' : v === 0 ? 'good' : today < 0 ? 'warn' : '');
+    out.innerHTML = v === 0 ? `${ic('sun')}מחר ${tom >= 0 ? `יחכו לך ${money(tom)}` : `המינוס יירד ל-${money(-tom)}`}. ${tom >= 0 && B.balance >= 0 ? 'ככה הקופה גדלה.' : 'ככה חוזרים לפלוס.'}`
+      : tom < 0 ? `${ic('warning')}מחר תתחיל במינוס של ${money(-tom)}, ויידרשו ${Math.ceil(-tom / B.base) + 1} ימים בלי הוצאות כדי לחזור לפלוס.`
+      : today < 0 ? `${ic('info')}זה ${money(-today)} יותר ממה שיש בקופה היום. מחר יישארו לך רק ${money(tom)}.`
+      : `${ic('check')}נשאר בקופה ${money(today)}, ומחר יהיו לך ${money(tom)}.`;
+  };
+  r.oninput = show; show();
 }
 
 function streakText(n) {
@@ -207,10 +275,10 @@ function celebrate(anchor) {
 let lastCounted = null;
 function countUp(el) {
   const b = $('.h-big', el); if (!b || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const target = +b.dataset.count; const sig = state.ui.curKey + ':' + target;
-  if (lastCounted === sig || target <= 0) return; lastCounted = sig;
-  const t0 = performance.now(), dur = 700;
-  const step = now => { const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3); b.innerHTML = money(Math.round(target * e)); if (p < 1) requestAnimationFrame(step); };
+  const target = +b.dataset.count, from = b.dataset.from != null ? +b.dataset.from : 0; const sig = state.ui.curKey + ':' + target;
+  if (lastCounted === sig || target === from || (target <= 0 && b.dataset.from == null)) return; lastCounted = sig;
+  const t0 = performance.now(), dur = b.dataset.from != null ? 1300 : 700;
+  const step = now => { const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3); b.innerHTML = money(Math.round(from + (target - from) * e)); if (p < 1) requestAnimationFrame(step); };
   requestAnimationFrame(step);
 }
 

@@ -273,3 +273,28 @@ console.log('v1.2 tests passed');
   assert.equal(tx[0].chargeDate, '2026-11-10');
   console.log('v2.9 tests passed');
 }
+
+// v3.0 - the daily bank: unspent money rolls to the next day, overspending goes to minus
+{
+  const { dailyBank, monthSummary } = await import('../js/calc.js');
+  const S = { income: 3000, startDay: 1, savings: { mode: 'fixed', value: 0 }, fixed: [], categories: [] }; // November: 30 days -> 100 a day
+  const at = d => new Date(2026, 10, d, 9);
+  let B = dailyBank(S, [], '2026-11', at(1));
+  assert.equal(B.base, 100); assert.equal(B.balance, 100); assert.equal(B.rolled, 0); assert.equal(B.tomorrow, 200);
+  B = dailyBank(S, [], '2026-11', at(4));
+  assert.equal(B.balance, 400, 'four days without spending = four daily amounts'); assert.equal(B.rolled, 300); assert.equal(B.zeroDays, 3);
+  const tx = [{ date: '2026-11-02', amount: 60, kind: 'expense' }, { date: '2026-11-03', amount: 350, kind: 'expense' }, { date: '2026-11-04', amount: 20, kind: 'expense' }];
+  B = dailyBank(S, tx.slice(0, 2), '2026-11', at(3));
+  assert.equal(B.morning, 240); assert.equal(B.balance, -110, 'overspending puts the bank in minus'); assert.equal(B.recoverDays, 2); assert.equal(B.tomorrow, -10);
+  B = dailyBank(S, tx, '2026-11', at(4));
+  assert.equal(B.morning, -10); assert.equal(B.spentToday, 20); assert.equal(B.balance, -30); assert.equal(B.yesterday, -110);
+  B = dailyBank(S, tx, '2026-11', at(30));
+  assert.equal(B.balance, monthSummary(S, tx, '2026-11', at(30)).remaining, 'on the last day the bank equals what is left for the month');
+  assert.equal(B.tomorrow, null);
+  assert.equal(dailyBank(S, tx, '2026-10', at(4)), null, 'only for the current month');
+  assert.equal(dailyBank({ ...S, income: 0 }, [], '2026-11', at(4)), null);
+  // a refunded purchase and a fixed expense do not touch the bank
+  B = dailyBank(S, [{ date: '2026-11-02', amount: 500, kind: 'expense', category: 'refund' }, { date: '2026-11-02', amount: 500, kind: 'expense', fixedId: 'f1' }], '2026-11', at(2));
+  assert.equal(B.balance, 200);
+  console.log('v3.0 daily bank tests passed');
+}
