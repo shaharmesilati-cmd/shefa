@@ -2,10 +2,10 @@
 // Below it: ONE next step, the savings goal with your streak, top categories, last purchases.
 // Everything else (charts, comparisons) lives behind "ניתוח החודש".
 import { state, catById, upsertTx, persist, changed, addCategory } from '../store.js';
-import { monthSummary, shiftKey, normMerchant, dailyBank, bankMilestone, isoOf } from '../calc.js';
+import { monthSummary, shiftKey, normMerchant, dailyBank, isoOf } from '../calc.js';
 import { $, $$, esc, ic, money, fmt0, MONTHS, openSheet, toast, shortDate } from '../util.js';
 import { txRow, catIcon } from './parts.js';
-import { monthInsights, needsCategory, isGenericMerchant, budgetStreak } from '../insights.js';
+import { monthInsights, needsCategory, isGenericMerchant } from '../insights.js';
 import { sameBusiness } from '../categorize.js';
 
 function greeting() {
@@ -21,7 +21,6 @@ export function render(el) {
   const parts = [];
   const past = C.daysLeft === 0, future = C.elapsed === 0;
 
-  parts.push(`<p class="greet">${greeting()}</p>`);
 
   // first run: just the three steps
   if (!S.income && !state.tx.length && !S.fixed.length && !S.goals.length && !S.categories.some(c => c.budget > 0)) {
@@ -41,61 +40,47 @@ export function render(el) {
 
   // hero ring: share of this month's spending money that is still left
   const left = C.available > 0 ? Math.max(0, C.remaining) / C.available : 0;
-  const big = C.remaining < 0 || past || future ? Math.abs(C.remaining) : Math.max(0, C.daily);
-  const label = C.remaining < 0 ? 'חרגת החודש ב-' : past ? 'נשאר בסוף החודש' : future ? 'יהיה לך להוציא החודש' : 'אפשר להוציא היום';
-  const sub = C.remaining < 0 ? 'מהיום כל שקל שנחסך מצמצם את החריגה'
-    : past || future ? `${C.total} ימים · תקציב ${money(C.available)}`
-    : `נשאר לחודש ${money(C.remaining)} · ${C.daysLeft} ימים`;
-  let fc = C.isCurrent && C.elapsed >= 5 && C.available > 0
-    ? (C.projectedEnd >= 0 ? `<span class="fc ok">${ic('trend-up')}בקצב הזה תסיים עם עודף של ${money(C.projectedEnd)}</span>`
-      : `<span class="fc bad">${ic('trend-down')}בקצב הזה תחרוג בכ-${money(-C.projectedEnd)}</span>`) : '';
-  // the daily bank: today's number is what piled up until today, minus what was already spent
-  const B = C.remaining >= 0 ? dailyBank(S, state.tx, key) : null;
-  let hb = { label, big, sub, cls: C.status, from: null, fresh: false };
+  const B = dailyBank(S, state.tx, key);
+  let hb;
   if (B) {
-    const minus = B.balance < 0;
-    hb.big = B.balance; hb.label = minus ? 'הקופה היומית במינוס' : 'אפשר להוציא היום';
-    hb.cls = minus ? 'watch minus' : C.status;
-    hb.sub = minus
-      ? (B.recoverable ? `בלי הוצאות, חוזרים לפלוס בעוד ${B.recoverDays === 1 ? 'יום אחד' : B.recoverDays + ' ימים'} · כל יום מוסיף ${money(B.base)}`
-        : `כל יום מוסיף ${money(B.base)} · כל שקל שלא יוצא מקטין את המינוס`)
-      : B.rolled > 0.5 ? `${money(B.base)} של היום + ${money(B.rolled)} שצברת מימים קודמים`
-      : B.rolled < -0.5 ? `${money(B.base)} של היום, פחות ${money(-B.rolled)} שיצאו מעבר בימים קודמים`
-      : `${money(B.base)} נכנסים לקופה בכל יום`;
-    fc = B.tomorrow != null ? `<span class="fc ${B.tomorrow >= 0 ? 'ok' : 'bad'}">${ic('sun')}${B.spentToday ? 'בלי עוד הוצאות היום,' : 'לא מוציא היום?'} מחר ${B.tomorrow >= 0 ? `יהיו לך ${money(B.tomorrow)}` : `המינוס יירד ל-${money(-B.tomorrow)}`}</span>`
-      : `<span class="fc ok">${ic('piggy')}היום האחרון של החודש. מה שנשאר, נשאר אצלך.</span>`;
+    const over = B.balance < 0;
+    hb = { label: over ? 'עברת את היומי ב-' : 'אפשר להוציא היום', big: Math.abs(B.balance), cls: over ? 'watch' : C.status === 'over' ? 'watch' : C.status, from: null, fresh: false, sub: '',
+      chip: B.tomorrow != null ? `<div class="fc-row"><span class="fc ok">${ic('sun')}${over ? 'מחר מתחילים מחדש:' : 'מחר:'} ${money(B.tomorrow)}</span><span class="fc soft">לחודש: ${money(C.remaining)}</span></div>`
+        : `<span class="fc ok">${ic('piggy')}היום האחרון של החודש</span>` };
     // first look today: the number climbs from where yesterday ended
     const todayIso = isoOf(new Date()); let seen = null;
-    try { seen = localStorage.getItem('stashwise-bank-day'); localStorage.setItem('stashwise-bank-day', todayIso); } catch { }
-    if (seen !== todayIso && B.day > 1 && !B.spentToday) { hb.from = B.yesterday; hb.fresh = true; }
+    try { seen = localStorage.getItem('stashwise-bank-day'); } catch { }
+    if (seen !== todayIso && B.day > 1 && !B.spentToday && !over) {
+      hb.from = Math.max(0, B.days[B.days.length - 2].left); hb.fresh = true;
+      try { localStorage.setItem('stashwise-bank-day', todayIso); } catch { }
+    }
+  } else {
+    hb = { label: C.remaining < 0 ? 'חרגת החודש ב-' : past ? 'נשאר בסוף החודש' : future ? 'יהיה לך להוציא החודש' : 'נשאר לחודש', big: Math.abs(C.remaining), cls: C.status, from: null, fresh: false,
+      sub: C.remaining < 0 ? 'כל שקל שלא יוצא מקטין את החריגה' : `${C.total} ימים · תקציב ${money(C.available)}`, chip: '' };
   }
   parts.push(`<section class="hero2 ${hb.cls}">
-    <div class="ring-wrap">
-      <svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-bg" cx="60" cy="60" r="${R}"></circle>
-        <circle class="ring-fg" cx="60" cy="60" r="${R}" stroke-dasharray="${CIRC.toFixed(1)}" stroke-dashoffset="${(CIRC * (1 - left)).toFixed(1)}"></circle></svg>
-      <div class="ring-in"><span class="h-lbl">${hb.label}</span><b class="h-big" data-count="${Math.round(hb.big)}"${hb.from != null ? ` data-from="${Math.round(hb.from)}"` : ''}>${money(hb.big)}</b>
-        ${hb.fresh ? `<span class="h-plus">+${money(B.base)} הבוקר</span>` : B ? `<span class="h-day">יום ${B.day} מתוך ${B.total}</span>` : ''}</div>
-    </div>
-    <p class="h-sub">${hb.sub}</p>${fc}
-    ${B ? `<p class="h-month">נשאר לחודש ${money(C.remaining)} · ${C.daysLeft} ימים</p>` : ''}
+    <${B ? 'button type="button" id="why" aria-label="איך המספר מחושב"' : 'div'} class="ring-wrap">
+      <svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--rc1)"/><stop offset="1" stop-color="var(--rc2)"/></linearGradient></defs>
+        <circle class="ring-bg" cx="60" cy="60" r="${R}"></circle>
+        <circle class="ring-fg" cx="60" cy="60" r="${R}" stroke="url(#rg)" stroke-dasharray="${CIRC.toFixed(1)}" stroke-dashoffset="${(CIRC * (1 - left)).toFixed(1)}" data-off="${(CIRC * (1 - left)).toFixed(1)}"></circle></svg>
+      <span class="ring-in"><span class="h-lbl">${hb.label}</span><b class="h-big" data-count="${Math.round(hb.big)}"${hb.from != null ? ` data-from="${Math.round(hb.from)}"` : ''}>${money(hb.big)}</b>
+        ${hb.fresh ? `<span class="h-plus">+${money(B.todayBase)} הבוקר</span>` : B ? `<span class="h-why">${ic('question')}</span>` : ''}</span>
+    </${B ? 'button' : 'div'}>
+    ${hb.sub ? `<p class="h-sub">${hb.sub}</p>` : ''}${hb.chip}
   </section>`);
-  const bev = B ? bankEvents(S, B, key) : null;
-  if (B) parts.push(bankCard(B, S, hb.fresh));
+  if (B) parts.push(vaultCard(B, S));
 
   // one next step
   parts.push(nextStep(S, C, key));
 
-  // savings goal + streak
-  const streak = C.isCurrent && C.status !== 'over' ? budgetStreak(S, state.tx) : 0;
+  // savings goal
   const g = S.goals.find(x => x.target > x.saved) || S.goals[0];
-  if (g || streak) {
-    const p = g && g.target ? Math.min(100, g.saved / g.target * 100) : 0;
+  if (g) {
+    const p = g.target ? Math.min(100, g.saved / g.target * 100) : 0;
     parts.push(`<section class="card save-card">
-      ${streak ? `<div class="streak"><span class="flame">${ic('flame')}</span><div><b>${streak} ${streak === 1 ? 'יום' : 'ימים'} ברצף</b><small>${streakText(streak)}</small></div></div>` : ''}
-      ${g ? `<div class="goal-hero"><div class="gh-top"><span class="gh-ic">${ic('piggy')}</span><div class="grow2"><b>${esc(g.name || 'יעד החיסכון')}</b><small>${money(g.saved)} מתוך ${money(g.target)}</small></div><b class="gh-pct num">${Math.round(p)}%</b></div>
+      <div class="goal-hero"><div class="gh-top"><span class="gh-ic">${ic('piggy')}</span><div class="grow2"><b>${esc(g.name || 'יעד החיסכון')}</b><small>${money(g.saved)} מתוך ${money(g.target)}</small></div><b class="gh-pct num">${Math.round(p)}%</b></div>
         <div class="gold-bar"><i style="width:${p.toFixed(1)}%"></i></div>
-        ${g.monthly ? `<button class="btn small gold" id="dep" type="button">${ic('plus')}הפקדתי ₪${fmt0(g.monthly)}</button>` : ''}</div>`
-      : `<a class="btn small ghost" href="#budget">${ic('target')}להגדיר יעד חיסכון</a>`}
+        ${g.monthly ? `<button class="btn small gold" id="dep" type="button">${ic('plus')}הפקדתי ₪${fmt0(g.monthly)}</button>` : ''}</div>
     </section>`);
   }
 
@@ -111,11 +96,12 @@ export function render(el) {
   const recent = C.inPeriod.slice().sort((a, b) => b.date.localeCompare(a.date) || b.added - a.added).slice(0, 3);
   if (recent.length) parts.push(`<section class="card"><div class="card-h"><h2>אחרונות</h2><a class="link" href="#expenses">כל התנועות</a></div><div class="tx-list">${recent.map(txRow).join('')}</div></section>`);
 
-  parts.push(`<button class="analysis-btn" id="analysis" type="button">${ic('sparkle')}<span><b>ניתוח החודש</b><small>לאן הלך הכסף, השוואה לחודש שעבר ותובנות</small></span>${ic('caret-left')}</button>`);
+  parts.push(`<button class="analysis-btn" id="analysis" type="button">${ic('sparkle')}<span><b>ניתוח החודש</b></span>${ic('caret-left')}</button>`);
 
   el.innerHTML = parts.join('');
   wire(el, cats);
-  wireBank(el, B, bev, hb.fresh);
+  wireBank(el, B, C);
+  enter(el);
   countUp(el);
 }
 
@@ -123,163 +109,118 @@ const WD = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
 const wdOf = iso => WD[new Date(iso + 'T12:00').getDay()];
 const JAR_MAX = 25;
 const daysWord = n => (n === 1 ? 'יום אחד' : `${n} ימים`);
+const vaultTotal = S => (S.locks || []).reduce((a, l) => a + l.amount, 0);
+let justLocked = 0; // how many coins should drop into the jar on the next paint
 
-/** Coins in the jar: one coin = one day's amount. `was` shows what a planned spend would take out. */
-function jarCoins(balance, base, was, tomorrow) {
-  const n = balance / base, w = was != null ? was / base : n;
-  const have = Math.max(0, n), had = Math.max(0, w);
-  const full = Math.min(JAR_MAX, Math.floor(have + 1e-9)), frac = have - Math.floor(have + 1e-9);
+/** Coins in the jar. The jar is the vault: it only holds money that was locked away, so it only grows. */
+function jarCoins(total, coin, fresh) {
+  const n = Math.max(0, total) / coin, full = Math.min(JAR_MAX, Math.floor(n + 1e-9)), frac = n - Math.floor(n + 1e-9);
   const out = [];
-  for (let i = 0; i < full; i++) out.push('<i class="coin"></i>');
-  if (frac > 0.04 && full < JAR_MAX) out.push(`<i class="coin part" style="--p:${Math.round(frac * 100)}%"></i>`);
-  const gone = Math.min(JAR_MAX, Math.ceil(had - 1e-9)) - out.length;
-  for (let i = 0; i < gone; i++) out.push('<i class="coin gone"></i>');
-  if (n < 0) for (let i = 0, d = Math.min(10, Math.ceil(-n - 1e-9)); i < d; i++) out.push('<i class="coin debt"></i>');
-  else if (tomorrow && was == null && out.length < JAR_MAX) out.push('<i class="coin next" title="המטבע של מחר"></i>');
+  for (let i = 0; i < full; i++) out.push(`<i class="coin${i >= full - fresh ? ' drop' : ''}" style="--i:${i};--d:${Math.max(0, i - (full - fresh))}"></i>`);
+  if (frac > 0.08 && full < JAR_MAX) out.push(`<i class="coin part${fresh && !full ? ' drop' : ''}" style="--i:${full};--d:${fresh};--p:${Math.round(frac * 100)}%"></i>`);
   return out.join('');
 }
+/** How much can be locked now: everything above one full day, and in the evening also what is left of today. */
+const lockableNow = B => Math.max(0, Math.floor(new Date().getHours() >= 20 ? B.balance : B.balance - B.base));
 
-/** Updates what the app remembers about the bank (record, milestones, yesterday's pledge) and says what just happened. */
-function bankEvents(S, B, key) {
-  const ev = { milestone: 0, pledgeWon: false, pledgeLost: false };
-  const st = S.bank || (S.bank = { key: '', best: 0, hit: [], pledge: null, wins: 0 });
-  let dirty = false;
-  if (st.key !== key) { st.key = key; st.best = 0; st.hit = []; dirty = true; }
-  const M = bankMilestone(B.balance, B.maxEnd, B.base);
-  if (M.prev > 0 && !st.hit.includes(M.prev)) { if (st.best > 0) ev.milestone = M.prev; st.hit.push(M.prev); dirty = true; }
-  if (B.balance > st.best) { st.best = B.balance; dirty = true; }
-  const todayIso = isoOf(new Date());
-  if (st.pledge && st.pledge < todayIso) {
-    const d = B.days.find(x => x.iso === st.pledge);
-    if (d && !d.spent) { st.wins++; ev.pledgeWon = true; } else if (d) ev.pledgeLost = true;
-    st.pledge = null; dirty = true;
-  }
-  if (dirty) persist();
-  return ev;
-}
-
-/** The jar, the next milestone, the pledge, the last days, the "what if" slider and the wish. */
-function bankCard(B, S, fresh) {
-  const st = S.bank, todayIso = isoOf(new Date());
-  const days = B.days.slice(-7), top = Math.max(B.base, ...days.map(d => d.spent)) || 1;
-  const max = Math.max(50, Math.ceil(Math.max(B.balance, B.base) * 1.5 / 10) * 10);
-  const M = bankMilestone(B.balance, B.maxEnd, B.base);
-  const coins = B.balance / B.base;
-  const head = B.balance < 0 ? `חסרים ${(-coins).toFixed(1).replace('.0', '')} מטבעות`
-    : `${coins >= 10 ? Math.floor(coins) : coins.toFixed(1).replace('.0', '')} מטבעות בצנצנת`;
-  const mile = B.balance < 0 ? `<p class="jr-line">${ic('plant')}כל יום בלי הוצאות ממלא מטבע אחד. ${B.recoverable ? `עוד ${daysWord(B.recoverDays)} והצנצנת חוזרת להתמלא.` : ''}</p>`
-    : M.next && M.reachable ? `<p class="jr-line">${ic('target')}עוד ${money(M.next - B.balance)} ל-${money(M.next)}${M.days ? ` · ${daysWord(M.days)} בלי הוצאות` : ''}</p>
-      <div class="gold-bar"><i style="width:${(M.pct * 100).toFixed(1)}%"></i></div>`
-    : `<p class="jr-line">${ic('piggy')}אם לא תוציא עד סוף החודש, יישארו לך ${money(B.maxEnd)}.</p>`;
-  const yday = B.days[B.days.length - 2];
-  const morning = fresh && yday ? (!yday.spent ? `${ic('sparkle')}<b>אתמול לא הוצאת כלום.</b> כל ה-${money(B.base)} עברו להיום, ומטבע חדש נפל לצנצנת.`
-    : yday.net > 0 ? `${ic('sparkle')}<b>אתמול נשארו לך ${money(yday.net)}.</b> הם עברו להיום, יחד עם מטבע חדש.`
-    : `אתמול יצאו ${money(-yday.net)} מעבר ליומי. היום נכנס מטבע חדש, ואפשר להתחיל למלא מחדש.`) : '';
-  const pledged = st.pledge === todayIso;
-  const pledge = B.tomorrow == null ? ''
-    : pledged ? (B.spentToday ? `<div class="pledge off">${ic('info')}<span>התחייבת ליום בלי הוצאות, והיום כבר יצאו ${money(B.spentToday, 'auto')}. לא נורא, מחר יום חדש.</span></div>`
-      : `<div class="pledge on">${ic('shield')}<span><b>התחייבת: היום לא מוציאים.</b> מחר יחכו לך ${money(B.tomorrow)}.</span></div>`)
-    : !B.spentToday ? `<button class="btn small pledge-btn" id="bk-pledge" type="button">${ic('lock')}היום אני לא מוציא</button>` : '';
-  const w = S.wish;
-  const wish = w ? `<button type="button" class="wish" id="bk-wish"><span class="wish-ic">${ic('gift')}</span><span class="wish-mid"><b>${esc(w.name)} · ${money(w.price)}</b>
-      <small>${B.balance >= w.price ? `הקופה כבר מכסה את זה, ויישארו ${money(B.balance - w.price)}` : B.balance > 0 ? `יש ${Math.floor(B.balance / w.price * 100)}% · חסרים ${money(w.price - B.balance)}${w.price <= B.maxEnd ? ` · ${daysWord(Math.ceil((w.price - B.balance) / B.base))} בלי הוצאות` : ''}` : `חסרים ${money(w.price - B.balance)}`}</small>
-      <span class="gold-bar"><i style="width:${Math.max(0, Math.min(100, B.balance / w.price * 100)).toFixed(1)}%"></i></span></span></button>`
-    : `<button type="button" class="link wish-add" id="bk-wish">${ic('gift')}בשביל מה אני צובר? להוסיף משאלה</button>`;
+/** The home card: a jar that fills with what you locked away, and one button. */
+function vaultCard(B, S) {
+  const vault = vaultTotal(S), w = S.wish, coin = Math.max(1, Math.round(B.base)), can = lockableNow(B);
+  const wp = w ? Math.max(0, Math.min(100, vault / w.price * 100)) : 0, fresh = justLocked; justLocked = 0;
   return `<section class="card bank">
-    <div class="card-h"><h2>${ic('coins')}הקופה היומית</h2>${st.wins ? `<span class="badge zero">${ic('shield')}${st.wins === 1 ? 'התחייבות אחת שעמדת בה' : st.wins + ' התחייבויות שעמדת בהן'}</span>` : B.zeroDays ? `<span class="badge zero">${ic('plant')}${daysWord(B.zeroDays)} בלי הוצאה</span>` : ''}</div>
     <div class="jar-row">
-      <button type="button" class="jar${B.balance < 0 ? ' empty' : ''}${fresh ? ' fresh' : ''}" id="bk-jar" aria-label="הצנצנת: ${head}. כל מטבע הוא יום אחד"><span class="jar-lid"></span><span class="jar-in" id="bk-coins">${jarCoins(B.balance, B.base, null, B.tomorrow != null)}</span>${coins > JAR_MAX ? `<span class="jar-x num">×${Math.floor(coins)}</span>` : ''}</button>
-      <div class="jar-side"><b class="jr-head" id="bk-head">${head}</b><small class="muted">כל מטבע = יום אחד של ${money(B.base)}</small>${mile}
-        ${st.best > B.balance + 1 && B.balance >= 0 ? `<small class="muted">שיא החודש: ${money(st.best)}</small>` : ''}</div>
+      <button type="button" class="jar${vault ? '' : ' empty'}" id="bk-vault" aria-label="הכספת: ${fmt0(vault)} שקלים"><span class="jar-lid"></span><span class="jar-shine"></span><span class="jar-in" id="bk-coins">${jarCoins(vault, coin, fresh)}</span>${vault / coin > JAR_MAX ? `<span class="jar-x num">×${Math.floor(vault / coin)}</span>` : ''}</button>
+      <div class="jar-side"><small class="muted">${w ? esc(w.name) : 'נעלתי בצד'}</small><b class="jr-sum num" id="bk-vsum" data-v="${vault}">${money(vault)}</b>
+        ${w ? `<span class="gold-bar"><i style="width:${wp.toFixed(1)}%"></i></span><small class="muted num">${Math.floor(wp)}% מתוך ${money(w.price)}</small>` : ''}
+        ${can >= 20 ? `<button class="pill-btn gold" id="bk-lock" type="button" data-amt="${can}">${ic('lock-key')}לנעול ${money(can)}</button>`
+          : !vault ? `<small class="muted">מה שלא תוציא, תוכל לנעול כאן</small>` : ''}</div>
     </div>
-    ${pledge}
-    <div class="bk-days" role="list">${days.map((d, i) => {
-      const today = i === days.length - 1, cls = !d.spent ? (today ? 'today' : 'zero') : d.spent <= B.base ? 'under' : 'over';
-      return `<button type="button" class="bk-day ${cls}${today ? ' is-today' : ''}" role="listitem" data-day="${d.iso}" aria-label="יום ${wdOf(d.iso)} ${shortDate(d.iso)}">
-        <span class="bk-col"><i style="height:${Math.max(6, Math.min(100, d.spent / top * 100)).toFixed(0)}%"></i></span>
-        <b class="num">${!d.spent ? (today ? '·' : '+' + fmt0(B.base)) : (d.net >= 0 ? '+' : '-') + fmt0(Math.abs(d.net))}</b><small>${today ? 'היום' : wdOf(d.iso) + "'"}</small></button>`; }).join('')}</div>
-    <p class="bk-info${morning ? ' morning' : ''}" id="bk-info" aria-live="polite">${morning || 'מה שלא הוצאת נשאר בצנצנת ועובר ליום הבא. לחץ על יום או על הצנצנת.'}</p>
-    ${B.tomorrow != null ? `<div class="bk-sim"><label for="bk-range">ואם אוציא היום ${B.spentToday ? 'עוד ' : ''}<b id="bk-x" class="num">₪0</b>?</label>
-      <input type="range" id="bk-range" min="0" max="${max}" step="5" value="0">
-      <p id="bk-out" class="bk-out"></p></div>` : ''}
-    ${wish}
   </section>`;
 }
 const buzz = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch { } };
-function wireBank(el, B, ev, fresh) {
+function wireBank(el, B, C) {
+  const why = $('#why', el); if (why && B) why.onclick = () => openWhy(B, C);
   const card = $('.bank', el); if (!card || !B) return;
-  const S = state.settings, info = $('#bk-info', card), jar = $('#bk-jar', card), coinsEl = $('#bk-coins', card), headEl = $('#bk-head', card);
-  const head0 = headEl.textContent;
-  jar.onclick = () => {
-    jar.classList.remove('shake'); void jar.offsetWidth; jar.classList.add('shake'); buzz(12);
-    info.classList.remove('morning');
-    info.innerHTML = B.balance < 0 ? `הצנצנת ריקה, וחסרים ${money(-B.balance)}. כל יום בלי הוצאות מחזיר מטבע של ${money(B.base)}.`
-      : `בצנצנת ${money(B.balance)}. המטבע המקווקו הוא של מחר: הוא נכנס גם אם תוציא היום, אבל רק מה שלא תוציא נשאר לידו.`;
+  const S = state.settings, jar = $('#bk-vault', card);
+  jar.onclick = () => openVault();
+  if (card.querySelector('.coin.drop')) setTimeout(() => { const j = $('#bk-vault'); if (j) { j.classList.add('land'); confetti(j, 36); } }, 520);
+  const lb = $('#bk-lock', card);
+  if (lb) lb.onclick = () => {
+    const amount = +lb.dataset.amt, id = 'l' + Date.now().toString(36), n = Math.min(6, Math.max(1, Math.round(amount / B.base)));
+    lb.disabled = true; lb.classList.add('done'); buzz([15, 30, 15]);
+    flyCoins($('.ring-wrap', el), jar, n, () => {
+      S.locks.push({ id, date: isoOf(new Date()), amount }); justLocked = n; persist(); changed('settings');
+      toast(`₪${fmt0(amount)} ננעלו בכספת`, { label: 'ביטול', fn: () => { S.locks = S.locks.filter(l => l.id !== id); persist(); changed('settings'); } });
+    });
   };
-  card.querySelectorAll('[data-day]').forEach(b => b.onclick = () => {
-    const d = B.days.find(x => x.iso === b.dataset.day); if (!d) return;
-    card.querySelectorAll('.bk-day').forEach(x => x.classList.toggle('sel', x === b));
-    const isT = b.classList.contains('is-today'), when = isT ? 'היום' : `יום ${wdOf(d.iso)}' ${shortDate(d.iso)}`, end = isT ? 'עומדת על' : 'נסגרה על';
-    info.classList.remove('morning');
-    info.innerHTML = !d.spent ? `<b>${when}:</b> ${isT ? 'עוד לא הוצאת כלום.' : 'לא הוצאת כלום.'} כל ה-${money(B.base)} ${isT ? 'עדיין' : 'נשארו'} בקופה. הקופה ${end} ${money(d.closed)}.`
-      : d.net >= 0 ? `<b>${when}:</b> הוצאת ${money(d.spent, 'auto')} מתוך ${money(B.base)}. ${money(d.net)} נשארו ועברו הלאה. הקופה ${end} ${money(d.closed)}.`
-      : `<b>${when}:</b> הוצאת ${money(d.spent, 'auto')}, שזה ${money(-d.net)} מעבר ליומי. הקופה ${end} ${money(d.closed)}.`;
-  });
-  const pb = $('#bk-pledge', card);
-  if (pb) pb.onclick = () => { S.bank.pledge = isoOf(new Date()); persist(); buzz(20); celebrate(pb); changed('settings'); toast('התחייבת. מחר נבדוק ביחד.'); };
-  $('#bk-wish', card).onclick = () => openWish();
-  const r = $('#bk-range', card);
-  if (r) {
-    const out = $('#bk-out', card), x = $('#bk-x', card); let lastCoins = -1;
+}
+
+/** "How is the number calculated?" - the sum as a picture, the last days, and a what-if slider. */
+function openWhy(B, C) {
+  const row = (label, val, cls = '') => `<div class="eq ${cls}"><span>${label}</span><b class="num">${val}</b></div>`;
+  const body = B.mode === 'saved'
+    ? row('כל יום מקבלים', money(B.base)) + (B.extra > 0.5 ? row('נשאר מימים קודמים', '+' + money(B.extra), 'plus') : '')
+    : row('נשאר לחודש', money(B.remaining + B.spentToday + B.lockedToday)) + row('ימים שנשארו', '÷ ' + B.daysLeft, 'div');
+  const days = B.days.slice(-7), top = Math.max(...days.map(d => Math.max(d.allow, d.spent)), 1);
+  const max = Math.max(50, Math.ceil(Math.max(B.balance, B.base) * 1.5 / 10) * 10);
+  openSheet('איך המספר מחושב', `<div class="eqs">${body}
+      ${B.spentToday ? row('הוצאת היום', '-' + money(B.spentToday, 'auto'), 'minus') : ''}${B.lockedToday ? row('נעלת בכספת', '-' + money(B.lockedToday), 'minus') : ''}
+      ${row(B.balance >= 0 ? 'אפשר להוציא היום' : 'מעבר ליומי', money(Math.abs(B.balance)), 'total')}</div>
+    ${B.mode === 'spread' ? `<p class="why-note">${ic('info')}הוצאת מהר מהקצב, אז מה שנשאר מתחלק על ${daysWord(B.daysLeft)}. יום בלי הוצאות מעלה את היומי.</p>` : ''}
+    <div class="why-month"><span class="soft-bar big"><i style="width:${Math.max(2, Math.min(100, C.spent / C.available * 100)).toFixed(1)}%"></i><em style="inset-inline-start:${(C.elapsed / C.total * 100).toFixed(1)}%"></em></span>
+      <small>החודש: יצאו ${money(C.spent)} מתוך ${money(C.available)} · הקו = היום</small></div>
+    <div class="bk-days" role="list">${days.map((d, i) => {
+      const today = i === days.length - 1, cls = !d.spent ? 'zero' : d.left >= 0 ? 'under' : 'over';
+      return `<button type="button" class="bk-day ${cls}${today ? ' is-today' : ''}" role="listitem" data-day="${d.iso}" aria-label="יום ${wdOf(d.iso)} ${shortDate(d.iso)}">
+        <span class="bk-col"><i style="--h:${Math.max(6, Math.min(100, d.spent / top * 100)).toFixed(0)}%;--i:${i}"></i><em style="bottom:${Math.min(100, d.allow / top * 100).toFixed(0)}%"></em></span>
+        <small>${today ? 'היום' : wdOf(d.iso) + "'"}</small></button>`; }).join('')}</div>
+    <p class="bk-info" id="bk-info" aria-live="polite">עמודה = כמה יצא · קו = כמה היה אפשר</p>
+    ${B.tomorrow != null ? `<div class="bk-sim"><label for="bk-range">ואם אוציא היום ${B.spentToday ? 'עוד ' : ''}<b id="bk-x" class="num">₪0</b>?</label>
+      <input type="range" id="bk-range" min="0" max="${max}" step="5" value="0" style="--f:0%">
+      <p id="bk-out" class="bk-out"></p></div>` : ''}`, sh => {
+    const info = $('#bk-info', sh);
+    sh.querySelectorAll('[data-day]').forEach(b => b.onclick = () => {
+      const d = B.days.find(x => x.iso === b.dataset.day); if (!d) return;
+      sh.querySelectorAll('.bk-day').forEach(x => x.classList.toggle('sel', x === b));
+      info.innerHTML = `<b>${b.classList.contains('is-today') ? 'היום' : `יום ${wdOf(d.iso)}' ${shortDate(d.iso)}`}</b> · יצאו ${money(d.spent, 'auto')} מתוך ${money(d.allow)}${d.locked ? ` · ננעלו ${money(d.locked)}` : ''}`;
+    });
+    const r = $('#bk-range', sh); if (!r) return;
+    const out = $('#bk-out', sh), x = $('#bk-x', sh);
     const show = () => {
-      const v = +r.value, tom = B.balance - v + B.base, today = B.balance - v;
+      const v = +r.value, today = B.balance - v, tom = Math.max(0, B.pace - v + B.base, (B.remaining - v) / (B.daysLeft - 1));
+      r.style.setProperty('--f', (v / +r.max * 100).toFixed(1) + '%');
       x.textContent = '₪' + fmt0(v);
-      coinsEl.innerHTML = jarCoins(today, B.base, v ? B.balance : null, true);
-      const lost = v / B.base, c = Math.floor(lost);
-      headEl.textContent = v ? `יוצאים ${lost >= 10 ? Math.round(lost) : lost.toFixed(1).replace('.0', '')} מטבעות` : head0;
-      headEl.classList.toggle('t-warn', !!v);
-      if (c !== lastCoins && lastCoins >= 0) buzz(6); lastCoins = c;
-      out.className = 'bk-out ' + (tom < 0 ? 'bad' : v === 0 ? 'good' : today < 0 ? 'warn' : '');
-      out.innerHTML = v === 0 ? `${ic('sun')}מחר ${tom >= 0 ? `יחכו לך ${money(tom)}` : `המינוס יירד ל-${money(-tom)}`}. ${tom >= 0 && B.balance >= 0 ? 'ככה הקופה גדלה.' : 'ככה חוזרים לפלוס.'}`
-        : tom < 0 ? `${ic('warning')}מחר תתחיל במינוס של ${money(-tom)}, ויידרשו ${Math.ceil(-tom / B.base) + 1} ימים בלי הוצאות כדי לחזור לפלוס.`
-        : today < 0 ? `${ic('info')}זה ${money(-today)} יותר ממה שיש בקופה היום. מחר יישארו לך רק ${money(tom)}.`
-        : `${ic('check')}נשאר בקופה ${money(today)}, ומחר יהיו לך ${money(tom)}`;
+      out.className = 'bk-out ' + (v === 0 ? 'good' : today < 0 ? 'warn' : '');
+      out.innerHTML = `<span><small>היום נשאר</small><b class="num">${today >= 0 ? money(today) : '-' + money(-today)}</b></span><span><small>מחר</small><b class="num">${money(tom)}</b></span>`;
     };
     r.oninput = show; show();
-  }
-  // one small celebration per visit, the most important first
-  const key = `${state.ui.curKey}:${ev.pledgeWon}:${ev.milestone}:${fresh}`;
-  if (wireBank.done === key) return; wireBank.done = key;
-  if (ev.pledgeWon) { toast(`עמדת בהתחייבות! יום שלם בלי הוצאות, ו-₪${fmt0(B.base)} נשארו בצנצנת.`); celebrate(jar); buzz([20, 40, 20]); }
-  else if (ev.milestone) { toast(`הקופה עברה את ₪${fmt0(ev.milestone)}!`); celebrate(jar); buzz([20, 40, 20]); }
-  else if (fresh && B.yesterdaySpent === 0) { celebrate(jar); buzz(15); }
-  else if (ev.pledgeLost) toast('אתמול ההתחייבות לא החזיקה. לא נורא, היום מתחילים מחדש.');
+  });
 }
-function openWish() {
-  const S = state.settings, w = S.wish;
-  openSheet('בשביל מה אני צובר?', `<p class="hint">דבר אחד שאתה רוצה. הקופה תראה לך כמה קרוב אתה אליו, וכל יום בלי הוצאות מקרב אותך.</p>
-    <div class="field"><label for="ws-n">מה זה?</label><input id="ws-n" type="text" maxlength="40" value="${esc(w ? w.name : '')}" placeholder="למשל: אוזניות, סופ״ש בצפון"></div>
-    <div class="field"><label for="ws-p">כמה זה עולה? (₪)</label><input id="ws-p" type="number" inputmode="numeric" min="1" step="1" value="${w ? w.price : ''}"></div>
-    <div class="row2"><button class="btn primary" id="ws-ok" type="button">${ic('check')}שמירה</button>${w ? `<button class="btn ghost" id="ws-del" type="button">${ic('trash')}הסרה</button>` : ''}</div>`, (sh, close) => {
+
+/** The vault: money locked away, and the one thing it is for. */
+function openVault() {
+  const S = state.settings, w = S.wish, total = vaultTotal(S), last = (S.locks || []).slice(-5).reverse();
+  openSheet('הכספת', `<div class="vault-big"><span class="vault-ic big">${ic('lock-key')}</span><b class="num">₪${fmt0(total)}</b></div>
+    <p class="hint">כסף שנעלת יוצא מהיומי ונשמר בצד. כדי שהוא באמת ייחסך, העבר אותו בבנק לחיסכון.</p>
+    ${last.length ? `<div class="vl-list">${last.map(l => `<div class="vl-row"><span>${shortDate(l.date)}</span><b class="num">₪${fmt0(l.amount)}</b><button class="btn small ghost" type="button" data-unlock="${esc(l.id)}">החזרה ליומי</button></div>`).join('')}</div>` : ''}
+    <h3>בשביל מה?</h3>
+    <div class="row2"><div class="field"><label for="ws-n">משאלה</label><input id="ws-n" type="text" maxlength="40" value="${esc(w ? w.name : '')}" placeholder="אוזניות, חופשה"></div>
+      <div class="field"><label for="ws-p">מחיר (₪)</label><input id="ws-p" type="number" inputmode="numeric" min="1" step="1" value="${w ? w.price : ''}"></div></div>
+    <div class="row2"><button class="btn primary" id="ws-ok" type="button">${ic('check')}שמירה</button>${w ? `<button class="btn ghost" id="ws-del" type="button">${ic('trash')}הסרת המשאלה</button>` : ''}</div>`, (sh, close) => {
+    sh.querySelectorAll('[data-unlock]').forEach(b => b.onclick = () => { S.locks = S.locks.filter(l => l.id !== b.dataset.unlock); persist(); close(); changed('settings'); toast('הוחזר ליומי'); });
     $('#ws-ok', sh).onclick = () => {
-      const price = Math.round(parseFloat($('#ws-p', sh).value)); if (!(price > 0)) { $('#ws-p', sh).focus(); return; }
-      S.wish = { name: $('#ws-n', sh).value.trim().slice(0, 40) || 'המשאלה שלי', price }; persist(); close(); changed('settings');
+      const price = Math.round(parseFloat($('#ws-p', sh).value)), name = $('#ws-n', sh).value.trim();
+      if (!name && !(price > 0)) { close(); return; }
+      if (!(price > 0)) { $('#ws-p', sh).focus(); return; }
+      S.wish = { name: name.slice(0, 40) || 'המשאלה שלי', price }; persist(); close(); changed('settings');
     };
     const del = $('#ws-del', sh); if (del) del.onclick = () => { S.wish = null; persist(); close(); changed('settings'); };
   });
 }
 
-function streakText(n) {
-  if (n >= 30) return 'חודש שלם בתוך התקציב. מדהים!';
-  if (n >= 14) return 'שבועיים ברצף. זה כבר הרגל.';
-  if (n >= 7) return 'שבוע שלם בתוך התקציב היומי.';
-  if (n >= 3) return 'ממשיך יפה. עוד יום ושומרים על הרצף.';
-  return 'ימים שבהם נשארת בתוך התקציב היומי.';
-}
-
 function catLine({ c, sp }) {
-  const pct = c.budget ? sp / c.budget : (sp > 0 ? 1.01 : 0), left = c.budget - sp;
-  const cls = pct >= 1 ? 'bad' : pct >= .8 ? 'warn' : '';
+  const pct = c.budget ? sp / c.budget : 0, left = c.budget - sp;
+  const cls = !c.budget ? 'nobudget' : pct >= 1 ? 'bad' : pct >= .8 ? 'warn' : '';
   return `<div class="cat-line" role="button" tabindex="0" data-catd="${esc(c.id)}">${catIcon(c)}
     <div class="cl-mid"><div class="cl-top"><span class="cl-n">${esc(c.name)}</span>
       <span class="cl-v ${left < 0 ? 't-bad' : pct >= .8 ? 't-warn' : ''}">${c.budget ? (left < 0 ? 'חריגה ' + money(-left) : 'נשאר ' + money(left)) : money(sp)}</span></div>
@@ -303,8 +244,7 @@ function nextStep(S, C, key) {
   }
   const hasSlip = C.inPeriod.some(t => t.kind === 'income' && t.source === 'payslip');
   if (C.isCurrent && !hasSlip && new Date().getDate() >= 5)
-    return `<section class="card next slip"><div class="nx-h"><span class="nx-ic">${ic('hand-coins')}</span><b>הגיע תלוש המשכורת?</b></div>
-      <p>צילום אחד, וההכנסה של החודש מתעדכנת לבד.</p><a class="btn small gold" href="#add" data-go="payslip">${ic('scan')}העלאת תלוש</a></section>`;
+    return `<section class="card next slip"><div class="nx-h"><span class="nx-ic">${ic('hand-coins')}</span><b>הגיע תלוש המשכורת?</b></div><a class="btn small gold" href="#add" data-go="payslip">${ic('scan')}העלאת תלוש</a></section>`;
   const days = S.lastBackup ? (Date.now() - S.lastBackup) / 86400000 : Infinity;
   if (state.tx.length >= 5 && days >= 7)
     return `<section class="card next backup"><div class="nx-h"><span class="nx-ic">${ic('shield')}</span><b>${S.lastBackup ? `עברו ${Math.floor(days)} ימים מהגיבוי האחרון` : 'עוד לא גיבית'}</b></div>
@@ -368,24 +308,66 @@ function wire(el, cats) {
   $('#analysis', el).onclick = openAnalysis;
 }
 
-/* small reward animation (respects reduced motion) */
-function celebrate(anchor) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const r = anchor.getBoundingClientRect(), colors = ['#F6B829', '#22B573', '#3D7BFA', '#FF8A4C', '#F2559A'];
-  for (let i = 0; i < 18; i++) {
-    const s = document.createElement('i'); s.className = 'spark';
-    s.style.cssText = `left:${r.left + r.width / 2}px;top:${r.top}px;background:${colors[i % 5]};--dx:${(Math.random() - .5) * 220}px;--dy:${-60 - Math.random() * 140}px`;
-    document.body.appendChild(s); setTimeout(() => s.remove(), 900);
+/* reward animations (all respect reduced motion) */
+const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const CONF = ['#F6B829', '#22B573', '#3D8BFA', '#FF8A4C', '#F2559A', '#8B6CF6', '#34C6D3'];
+/** A burst of colorful confetti (strips, dots and coins) that rises and falls with gravity. */
+function confetti(anchor, n = 28) {
+  if (calm() || !anchor || !anchor.animate) return;
+  const r = anchor.getBoundingClientRect(), x0 = r.left + r.width / 2, y0 = r.top + r.height * .35;
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('i'), kind = i % 5 === 0 ? 'coin' : i % 3 === 0 ? 'dot' : 'strip';
+    s.className = 'confetti ' + kind; s.style.left = x0 + 'px'; s.style.top = y0 + 'px';
+    if (kind !== 'coin') s.style.background = CONF[i % CONF.length];
+    document.body.appendChild(s);
+    const a = -Math.PI / 2 + (Math.random() - .5) * 2.2, v = 110 + Math.random() * 170;
+    const dx = Math.cos(a) * v, up = Math.sin(a) * v, rot = (Math.random() - .5) * 900, dur = 1100 + Math.random() * 700;
+    s.animate([
+      { transform: 'translate(-50%,-50%) scale(.3)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${dx * .6}px), calc(-50% + ${up}px)) rotate(${rot * .4}deg) scale(1)`, opacity: 1, offset: .35, easing: 'cubic-bezier(.3,0,.7,1)' },
+      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${up + 260 + Math.random() * 120}px)) rotate(${rot}deg) scale(.9)`, opacity: 0 },
+    ], { duration: dur, easing: 'cubic-bezier(.15,.7,.3,1)', fill: 'forwards' }).onfinish = () => s.remove();
   }
 }
+const celebrate = a => confetti(a, 26);
+/** Coins pop out of the big number and fly in an arc into the jar. */
+function flyCoins(from, to, n, done) {
+  if (calm() || !from || !to || !from.animate) { done(); return; }
+  const fr = from.getBoundingClientRect(), tr = to.getBoundingClientRect(); let left = n;
+  for (let i = 0; i < n; i++) {
+    const f = document.createElement('i'), x = fr.left + fr.width / 2 - 10 + (i - (n - 1) / 2) * 16, y = fr.top + fr.height * .55;
+    f.className = 'coin flying'; f.style.cssText = `position:fixed;z-index:80;left:${x}px;top:${y}px;margin:0`;
+    document.body.appendChild(f);
+    const dx = tr.left + tr.width / 2 - 10 - x, dy = tr.top + 14 - y;
+    f.animate([
+      { transform: 'translate(0,0) scale(.2)', opacity: 0 },
+      { transform: 'translate(0,-26px) scale(1.5)', opacity: 1, offset: .22, easing: 'cubic-bezier(.3,0,.5,1)' },
+      { transform: `translate(${dx * .55}px, ${dy * .35 - 60}px) scale(1.2) rotate(200deg)`, opacity: 1, offset: .6 },
+      { transform: `translate(${dx}px, ${dy}px) scale(.9) rotate(420deg)`, opacity: 1 },
+    ], { duration: 780, delay: i * 90, easing: 'cubic-bezier(.4,0,.3,1)', fill: 'forwards' }).onfinish = () => { f.remove(); buzz(6); if (--left === 0) done(); };
+  }
+}
+/** Soft entrance when you arrive at the screen (not on every small update). */
+let entering = true;
+addEventListener('hashchange', () => { entering = true; });
+function enter(el) {
+  const ring = $('.ring-fg', el);
+  if (!entering || calm()) return;
+  entering = false;
+  el.classList.remove('enter'); void el.offsetWidth; el.classList.add('enter');
+  if (ring) { const off = ring.dataset.off; ring.style.transition = 'none'; ring.setAttribute('stroke-dashoffset', CIRC.toFixed(1)); void ring.getBoundingClientRect(); ring.style.transition = ''; requestAnimationFrame(() => ring.setAttribute('stroke-dashoffset', off)); }
+}
 /* the big number counts up once per screen visit */
+let lastShown = null;
 let lastCounted = null;
 function countUp(el) {
   const b = $('.h-big', el); if (!b || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const target = +b.dataset.count, from = b.dataset.from != null ? +b.dataset.from : 0; const sig = state.ui.curKey + ':' + target;
-  if (lastCounted === sig || target === from || (target <= 0 && b.dataset.from == null)) return; lastCounted = sig;
-  const t0 = performance.now(), dur = b.dataset.from != null ? 1300 : 700;
-  const step = now => { const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3); b.innerHTML = money(Math.round(from + (target - from) * e)); if (p < 1) requestAnimationFrame(step); };
+  const target = +b.dataset.count, sig = state.ui.curKey + ':' + target;
+  const from = b.dataset.from != null ? +b.dataset.from : lastShown && lastShown.key === state.ui.curKey ? lastShown.v : 0;
+  lastShown = { key: state.ui.curKey, v: target };
+  if (lastCounted === sig || target === from || calm()) return; lastCounted = sig;
+  const t0 = performance.now(), dur = 650;
+  const step = now => { const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 5); b.innerHTML = money(Math.round(from + (target - from) * e)); if (p < 1) requestAnimationFrame(step); else { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); } };
   requestAnimationFrame(step);
 }
 

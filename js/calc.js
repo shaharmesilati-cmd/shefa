@@ -56,7 +56,10 @@ export function monthSummary(settings, allTx, key, today = new Date()) {
   const savings = savingsAmount(settings, income);
   const available = income - fixedTotal - savings;
   const spent = sum(variable);
-  const remaining = available - spent;
+  // money the user locked into the vault this month: it is no longer spendable, but it is not an expense
+  const locks = (settings.locks || []).filter(l => l.date && budgetKeyOf(l.date, sd) === key);
+  const locked = sum(locks);
+  const remaining = available - spent - locked;
 
   const { start, end } = periodOf(key, sd);
   const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -76,7 +79,7 @@ export function monthSummary(settings, allTx, key, today = new Date()) {
   // big one-off purchases (a quarter of the month's money or more) are not projected forward
   const oneOff = available > 0 ? variable.filter(t => t.amount >= available * 0.25).reduce((a, t) => a + t.amount, 0) : 0;
   const projectedSpend = isCurrent && elapsed >= 5 ? oneOff + (spent - oneOff) / elapsed * total : spent;
-  const projectedEnd = available - projectedSpend;
+  const projectedEnd = available - projectedSpend - locked;
 
   const byCat = {};
   const known = new Set((settings.categories || []).map(c => c.id));
@@ -88,45 +91,51 @@ export function monthSummary(settings, allTx, key, today = new Date()) {
   const refunded = sum(back.filter(t => t.amount > 0));
 
   return {
-    key, inPeriod, variable, plannedIncome, actualIncome, income, fixedTotal, savings, available, spent, remaining,
+    key, inPeriod, variable, plannedIncome, actualIncome, income, fixedTotal, savings, available, spent, remaining, locked, locks,
     start, end, total, elapsed, daysLeft, daily, weekly, expectedByNow, status, isCurrent, projectedEnd,
     byCat, allocated, unallocated: available - allocated, fixedSeen, refunded, refundCount: back.length,
   };
 }
 
 /**
- * The daily "bank". Every day of the month adds the same daily amount (the month's spending money / days).
- * What you did not spend stays and rolls to the next day; spending more than you have puts the bank in minus.
- * Returns null when the month is not the current one or there is no spending money.
+ * The daily "bank". Every day adds the same daily amount (the month's spending money / days in the month).
+ * What you did not spend stays and rolls to the next day. If you spent faster than that, the bank never shows a
+ * scary minus: what is left of the month is simply spread again over the days that are left.
+ *   today's amount (morning) = max( rolled-over bank , month remaining / days left )
+ * Returns null when the month is not the current one, or there is no money left for the month.
  */
 export function dailyBank(settings, allTx, key, today = new Date()) {
   const C = monthSummary(settings, allTx, key, today);
-  if (!C.isCurrent || !(C.available > 0)) return null;
+  if (!C.isCurrent || !(C.available > 0) || C.remaining < 0) return null;
   const base = C.available / C.total;
   const startIso = isoOf(C.start), todayIso = isoOf(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
-  const byDay = {};
-  for (const t of C.variable) {
-    // purchases dated outside the days that already passed (charge-month mode, a future date) sit on the nearest day
-    const d = t.date < startIso ? startIso : t.date > todayIso ? todayIso : t.date;
-    byDay[d] = (byDay[d] || 0) + t.amount;
-  }
-  const days = []; let cum = 0, zeroDays = 0;
+  const clamp = d => (d < startIso ? startIso : d > todayIso ? todayIso : d); // charge-month mode / future dates sit on the nearest passed day
+  const byDay = {}, byLock = {};
+  for (const t of C.variable) { const d = clamp(t.date); byDay[d] = (byDay[d] || 0) + t.amount; }
+  for (const l of C.locks) { const d = clamp(l.date); byLock[d] = (byLock[d] || 0) + l.amount; }
+  const r2 = v => Math.round(v * 100) / 100;
+  const days = []; let out = 0, zeroDays = 0; // out = everything that left the bank before this day
   for (let i = 1; i <= C.elapsed; i++) {
     const iso = isoOf(new Date(C.start.getFullYear(), C.start.getMonth(), C.start.getDate() + i - 1));
-    const spent = byDay[iso] || 0, opened = base * i - cum;
-    cum += spent;
+    const spent = byDay[iso] || 0, locked = byLock[iso] || 0;
+    const rolled = base * i - out, fair = (C.available - out) / (C.total - i + 1);
+    const allow = Math.max(rolled, fair);
+    out += spent + locked;
     if (!spent && iso !== todayIso) zeroDays++;
-    days.push({ iso, spent, opened, closed: base * i - cum, net: base - spent });
+    days.push({ iso, spent: r2(spent), locked: r2(locked), allow: r2(allow), left: r2(allow - spent - locked), saved: rolled >= base - 0.005 });
   }
-  const t = days[days.length - 1], prev = days[days.length - 2];
-  const r2 = v => Math.round(v * 100) / 100;
+  const t = days[days.length - 1], i = C.elapsed;
+  const rolledNow = base * i - out; // can be negative: how far ahead of the even pace the spending is
+  const fairMorning = (C.available - (out - t.spent - t.locked)) / C.daysLeft;
+  const tomorrow = C.daysLeft > 1 ? Math.max(rolledNow + base, C.remaining / (C.daysLeft - 1)) : null;
   return {
-    base: r2(base), balance: r2(t.closed), morning: r2(t.opened), spentToday: r2(t.spent),
-    rolled: r2(t.opened - base), yesterday: prev ? r2(prev.closed) : 0, yesterdaySpent: prev ? r2(prev.spent) : null,
-    tomorrow: C.daysLeft > 1 ? r2(t.closed + base) : null,
-    recoverDays: t.closed < 0 ? Math.ceil(-t.closed / base) : 0, recoverable: t.closed >= 0 || Math.ceil(-t.closed / base) < C.daysLeft,
-    zeroDays, days, daysLeft: C.daysLeft, day: C.elapsed, total: C.total,
-    maxEnd: r2(t.closed + base * (C.daysLeft - 1)), // the most the bank can reach by the end of the month
+    base: r2(base), morning: t.allow, balance: t.left, spentToday: t.spent, lockedToday: t.locked,
+    mode: t.saved ? 'saved' : 'spread',              // saved: ahead, money piled up. spread: the rest of the month re-spread
+    todayBase: r2(t.saved ? base : fairMorning),     // today's own daily amount
+    extra: r2(t.saved ? t.allow - base : 0),         // what rolled over from earlier days
+    lockable: Math.max(0, Math.floor(t.left - base)),// what can go to the vault and still leave one full day
+    pace: r2(rolledNow), tomorrow: tomorrow == null ? null : r2(tomorrow),
+    zeroDays, days, daysLeft: C.daysLeft, day: i, total: C.total, remaining: r2(C.remaining), maxEnd: r2(C.remaining),
   };
 }
 const BANK_STEPS = [250, 500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000, 15000, 20000, 30000, 50000];

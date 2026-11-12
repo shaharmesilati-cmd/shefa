@@ -70,7 +70,9 @@ export function monthInsights(settings, tx, key, today = new Date()) {
 /** Purchases that still sit in "other" and were never confirmed - the "needs your attention" list. */
 export function needsCategory(settings, tx, key) {
   const C = monthSummary(settings, tx, key);
-  return C.inPeriod.filter(t => isCounted(t) && t.kind === 'expense' && (t.category || 'other') === 'other' && !t.confirmed && !t.fixedId && !/טרם\s*נקלט/.test(t.merchant || ''))
+  const known = new Set((settings.categories || []).map(c => c.id));
+  // a category that was deleted counts as "שונות" too
+  return C.inPeriod.filter(t => isCounted(t) && t.kind === 'expense' && (!t.category || t.category === 'other' || !known.has(t.category)) && !t.confirmed && !t.fixedId && !/טרם\s*נקלט/.test(t.merchant || ''))
     .sort((a, b) => b.amount - a.amount);
 }
 
@@ -82,7 +84,7 @@ export const isGenericMerchant = m => /bit|ביט|paybox|פייבוקס|paypal|�
  * Counting starts only from the first day the user has any purchase, so an empty app has no streak.
  */
 export function budgetStreak(settings, tx, today = new Date()) {
-  const exp = tx.filter(t => t.kind === 'expense' && !t.ignored && !t.fixedId && t.date);
+  const exp = tx.filter(t => t.kind === 'expense' && !t.ignored && !t.fixedId && t.date && t.category !== 'refund');
   if (!exp.length) return 0;
   const first = exp.reduce((m, t) => (t.date < m ? t.date : m), exp[0].date);
   const byDay = {};

@@ -14,7 +14,7 @@ export function render(el) {
         <div class="field"><label for="ex-cat">הצג</label><select id="ex-cat"></select></div>
       </div></section>
     <section class="card" id="ex-list"></section>
-    <button class="fab" id="ex-add" type="button">${ic('plus')}הוספה ידנית</button>`;
+    <button class="btn ghost wide" id="ex-add" type="button">${ic('plus')}הוספה ידנית</button>`;
   $('#ex-q', el).addEventListener('input', e => { f.q = e.target.value; list(el); });
   $('#ex-cat', el).addEventListener('change', e => { f.cat = e.target.value; list(el); });
   $('#ex-add', el).onclick = () => openTxSheet(null);

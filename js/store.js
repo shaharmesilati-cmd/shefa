@@ -30,6 +30,7 @@ export function normalizeSettings(d) {
   const bk = d.bank && typeof d.bank === 'object' ? d.bank : {};
   s.bank = { key: /^\d{4}-\d{2}$/.test(bk.key || '') ? bk.key : '', best: Number(bk.best) || 0, hit: Array.isArray(bk.hit) ? bk.hit.map(Number).filter(n => n > 0).slice(0, 20) : [],
     pledge: validISO(bk.pledge) ? bk.pledge : null, wins: Math.max(0, Math.floor(Number(bk.wins) || 0)) };
+  s.locks = (Array.isArray(d.locks) ? d.locks : []).filter(l => l && validISO(l.date) && Number(l.amount) > 0).map(l => ({ id: String(l.id || uid()), date: l.date, amount: Math.round(Number(l.amount)) })).slice(-600);
   const w = d.wish && typeof d.wish === 'object' ? d.wish : null;
   s.wish = w && Number(w.price) > 0 ? { name: String(w.name || '').trim().slice(0, 40) || 'המשאלה שלי', price: Math.round(Number(w.price)) } : null;
   if (d.savings) s.savings = { mode: d.savings.mode === 'fixed' ? 'fixed' : 'percent', value: num(d.savings.value) };
@@ -107,7 +108,7 @@ export const catById = id => state.settings.categories.find(c => c.id === id) ||
 export function addCategory(name, icon = 'tag') {
   name = String(name || '').trim().slice(0, 40); if (!name) return null;
   const S = state.settings, same = S.categories.find(c => c.name.trim() === name);
-  if (same) return same.id;
+  if (same) return same.id === REFUND ? null : same.id;
   const at = S.categories.findIndex(c => c.id === REFUND || c.id === 'other');
   const c = { id: uid(), name, icon: CAT_ICONS.includes(icon) ? icon : 'tag', budget: 0, weight: 0, color: CAT_COLORS[S.categories.length % CAT_COLORS.length] };
   S.categories.splice(at < 0 ? S.categories.length : at, 0, c);

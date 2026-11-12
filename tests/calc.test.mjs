@@ -148,8 +148,11 @@ console.log('v1.2 tests passed');
     const b = [{ date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '5512' }, { date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '4093' }];
     assert.deepEqual(markDuplicates([a, b], []).map(r => r.dup), [null, null, 'batch'], 'same purchase on another card is not a duplicate');
     const saved = [{ id: 's1', date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '4093' }];
-    const again = markDuplicates([[{ date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '5512' }]], saved);
-    assert.deepEqual([again[0].dup, again[0].dupOf], ['saved', 's1'], 'saved purchase with a wrong card is matched so its card can be fixed');
+    const again = markDuplicates([[{ date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '4098' }]], saved);
+    assert.deepEqual([again[0].dup, again[0].dupOf], ['saved', 's1'], 'saved purchase with a misread card is matched so its card can be fixed');
+    const noCard = markDuplicates([[{ date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '5512' }]], [{ ...saved[0], card: null }]);
+    assert.equal(noCard[0].dup, 'saved', 'a saved purchase without a card gets the card from the screenshot');
+    assert.equal(markDuplicates([[{ date: '2026-11-05', merchant: 'טעינות חבר', amount: 70, card: '5512' }]], saved)[0].dup, null, 'the same shop and amount on another card is another purchase');
   }
   {
     const { classify, sameBusiness, brandOf } = await import('../js/categorize.js');
@@ -274,28 +277,44 @@ console.log('v1.2 tests passed');
   console.log('v2.9 tests passed');
 }
 
-// v3.0 - the daily bank: unspent money rolls to the next day, overspending goes to minus
+// v3.0 - the daily bank: unspent money rolls to the next day; spending fast never shows a scary minus
 {
   const { dailyBank, monthSummary } = await import('../js/calc.js');
   const S = { income: 3000, startDay: 1, savings: { mode: 'fixed', value: 0 }, fixed: [], categories: [] }; // November: 30 days -> 100 a day
   const at = d => new Date(2026, 10, d, 9);
   let B = dailyBank(S, [], '2026-11', at(1));
-  assert.equal(B.base, 100); assert.equal(B.balance, 100); assert.equal(B.rolled, 0); assert.equal(B.tomorrow, 200);
+  assert.equal(B.base, 100); assert.equal(B.balance, 100); assert.equal(B.extra, 0); assert.equal(B.tomorrow, 200); assert.equal(B.mode, 'saved');
   B = dailyBank(S, [], '2026-11', at(4));
-  assert.equal(B.balance, 400, 'four days without spending = four daily amounts'); assert.equal(B.rolled, 300); assert.equal(B.zeroDays, 3);
-  const tx = [{ date: '2026-11-02', amount: 60, kind: 'expense' }, { date: '2026-11-03', amount: 350, kind: 'expense' }, { date: '2026-11-04', amount: 20, kind: 'expense' }];
-  B = dailyBank(S, tx.slice(0, 2), '2026-11', at(3));
-  assert.equal(B.morning, 240); assert.equal(B.balance, -110, 'overspending puts the bank in minus'); assert.equal(B.recoverDays, 2); assert.equal(B.tomorrow, -10);
-  B = dailyBank(S, tx, '2026-11', at(4));
-  assert.equal(B.morning, -10); assert.equal(B.spentToday, 20); assert.equal(B.balance, -30); assert.equal(B.yesterday, -110);
-  B = dailyBank(S, tx, '2026-11', at(30));
-  assert.equal(B.balance, monthSummary(S, tx, '2026-11', at(30)).remaining, 'on the last day the bank equals what is left for the month');
+  assert.equal(B.balance, 400, 'four days without spending = four daily amounts'); assert.equal(B.extra, 300); assert.equal(B.zeroDays, 3);
+  assert.equal(B.lockable, 300, 'everything above one full day can be locked');
+  // spent 1,500 in the first days: the rolled bank would be -1,100 on day 4, but 1,500 is still left for 27 days
+  const fast = [{ date: '2026-11-02', amount: 1500, kind: 'expense' }];
+  B = dailyBank(S, fast, '2026-11', at(4));
+  assert.equal(B.mode, 'spread'); assert.equal(B.pace, -1100);
+  assert.equal(B.balance, 55.56, 'never a minus while the month still has money: 1,500 / 27 days');
+  assert.equal(B.todayBase, 55.56); assert.equal(B.lockable, 0);
+  assert.equal(B.tomorrow, 57.69, 'a day without spending raises tomorrow: 1,500 / 26');
+  // spending today more than today's amount shows a small minus for today only
+  B = dailyBank(S, [...fast, { date: '2026-11-04', amount: 80, kind: 'expense' }], '2026-11', at(4));
+  assert.equal(B.balance, -24.44); assert.equal(B.tomorrow, 54.62);
+  // back above the even pace -> rolls again
+  B = dailyBank(S, [{ date: '2026-11-02', amount: 150, kind: 'expense' }], '2026-11', at(3));
+  assert.equal(B.mode, 'saved'); assert.equal(B.balance, 150);
+  B = dailyBank(S, [{ date: '2026-11-02', amount: 60, kind: 'expense' }, { date: '2026-11-03', amount: 20, kind: 'expense' }], '2026-11', at(30));
+  assert.equal(B.balance, monthSummary(S, [{ amount: 80, date: '2026-11-02', kind: 'expense' }], '2026-11', at(30)).remaining, 'on the last day the bank equals what is left for the month');
   assert.equal(B.tomorrow, null);
-  assert.equal(dailyBank(S, tx, '2026-10', at(4)), null, 'only for the current month');
+  assert.equal(dailyBank(S, [], '2026-10', at(4)), null, 'only for the current month');
   assert.equal(dailyBank({ ...S, income: 0 }, [], '2026-11', at(4)), null);
+  assert.equal(dailyBank(S, [{ date: '2026-11-02', amount: 3500, kind: 'expense' }], '2026-11', at(4)), null, 'month overspent: the month view takes over');
   // a refunded purchase and a fixed expense do not touch the bank
   B = dailyBank(S, [{ date: '2026-11-02', amount: 500, kind: 'expense', category: 'refund' }, { date: '2026-11-02', amount: 500, kind: 'expense', fixedId: 'f1' }], '2026-11', at(2));
   assert.equal(B.balance, 200);
+  // locking money into the vault takes it out of the spendable number but it is not an expense
+  const L = { ...S, locks: [{ date: '2026-11-04', amount: 300 }] };
+  B = dailyBank(L, [], '2026-11', at(4));
+  assert.equal(B.balance, 100); assert.equal(B.lockedToday, 300); assert.equal(B.tomorrow, 200);
+  const C = monthSummary(L, [], '2026-11', at(4));
+  assert.equal(C.spent, 0); assert.equal(C.locked, 300); assert.equal(C.remaining, 2700);
   console.log('v3.0 daily bank tests passed');
 }
 
@@ -313,6 +332,35 @@ console.log('v1.2 tests passed');
   const s = normalizeSettings({ bank: { key: '2026-11', best: 620, hit: [250, 500, 'x'], pledge: '2026-11-10', wins: 2 }, wish: { name: ' אוזניות ', price: '600' } });
   assert.deepEqual(s.bank, { key: '2026-11', best: 620, hit: [250, 500], pledge: '2026-11-10', wins: 2 });
   assert.deepEqual(s.wish, { name: 'אוזניות', price: 600 });
+  assert.deepEqual(normalizeSettings({ locks: [{ id: 'a', date: '2026-11-04', amount: '120.4' }, { date: 'x', amount: 5 }, { date: '2026-11-05', amount: -3 }] }).locks, [{ id: 'a', date: '2026-11-04', amount: 120 }]);
   assert.equal(normalizeSettings({ wish: { name: 'x', price: 0 } }).wish, null);
   console.log('v3.1 bank extras tests passed');
+}
+
+// v3.2 - red team findings
+{
+  const { markDuplicates, samePurchase } = await import('../js/dedupe.js');
+  const { budgetStreak } = await import('../js/insights.js');
+  const row = (m, a, extra = {}) => ({ date: '2026-11-05', merchant: m, amount: a, ...extra });
+  // the same purchase in three overlapping screenshots is imported once
+  let r = markDuplicates([[row('שופרסל', 50)], [row('שופרסל', 50)], [row('שופרסל', 50)]], []);
+  assert.deepEqual(r.map(x => x.dup), [null, 'batch', 'batch']);
+  // two identical purchases inside one screenshot are both real, also when a second screenshot repeats them
+  r = markDuplicates([[row('קפה', 12), row('קפה', 12)], [row('קפה', 12), row('קפה', 12)]], []);
+  assert.deepEqual(r.map(x => x.dup), [null, null, 'batch', 'batch']);
+  // different shops with the same .90 price on the same day are two purchases
+  assert.equal(samePurchase(row('שופרסל דיל', 19.9), row('רמי לוי', 19.9)), false);
+  assert.equal(samePurchase(row('סופר פארם', 19.9), row('שופרסל', 19.9)), false);
+  // a mangled reading of the same purchase still matches
+  assert.equal(samePurchase(row("TD YELLOW-N'yj7'79N", 278.01, { card: '3315' }), row('פז אפליקצית-YELLOW', 278.01, { card: '3315' })), true);
+  // against saved purchases: a different card is a different purchase, a missing or misread card is not
+  assert.equal(samePurchase(row('קפה ג׳ו', 30, { card: '2222' }), row('קפה ג׳ו', 30, { card: '1111' }), true), false);
+  assert.equal(samePurchase(row('קפה ג׳ו', 30, { card: '3314' }), row('קפה ג׳ו', 30, { card: '3814' }), true), true);
+  assert.equal(samePurchase(row('קפה ג׳ו', 30), row('קפה ג׳ו', 30, { card: '1111' }), true), true);
+  // money that came back does not break the streak
+  const S = { income: 10000, startDay: 1, savings: { mode: 'fixed', value: 0 }, fixed: [], categories: [] };
+  const base = [{ date: '2026-11-01', amount: 10, kind: 'expense' }];
+  const today = new Date(2026, 10, 11, 9);
+  assert.equal(budgetStreak(S, [...base, { date: '2026-11-09', amount: 900, kind: 'expense', category: 'refund' }], today), budgetStreak(S, base, today));
+  console.log('v3.2 red team tests passed');
 }

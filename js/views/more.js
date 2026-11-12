@@ -5,7 +5,7 @@ import { budgetKeyOf, normMerchant, txKey } from '../calc.js';
 import { catById } from '../store.js';
 import { install, lockNow, session, startAutoLock, stopAutoLock } from '../app.js';
 
-const VERSION = '3.1.0';
+const VERSION = '3.2.0';
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
