@@ -364,3 +364,22 @@ console.log('v1.2 tests passed');
   assert.equal(budgetStreak(S, [...base, { date: '2026-11-09', amount: 900, kind: 'expense', category: 'refund' }], today), budgetStreak(S, base, today));
   console.log('v3.2 red team tests passed');
 }
+
+// v3.3 - cleaning duplicates that were saved before the filters improved
+{
+  const { findSavedDuplicates } = await import('../js/dedupe.js');
+  const t0 = 1700000000000, H = 3600000;
+  const tx = [
+    { id: 'a', date: '2026-11-05', merchant: 'שופרסל דיל', amount: 214.9, kind: 'expense', card: '3314', added: t0 },
+    { id: 'b', date: '2026-11-05', merchant: 'קפה גו', amount: 12, kind: 'expense', added: t0 + 1 },
+    { id: 'c', date: '2026-11-05', merchant: 'קפה גו', amount: 12, kind: 'expense', added: t0 + 2 },      // two coffees in the same upload: real
+    { id: 'd', date: '2026-11-05', merchant: 'שופרסל דיל', amount: 214.9, kind: 'expense', card: '3314', added: t0 + 5 * H }, // saved again later
+    { id: 'e', date: '2026-11-05', merchant: 'קפה גו', amount: 12, kind: 'expense', added: t0 + 5 * H + 1 },
+    { id: 'f', date: '2026-11-05', merchant: 'קפה גו', amount: 12, kind: 'expense', added: t0 + 5 * H + 2 },
+    { id: 'g', date: '2026-11-05', merchant: 'שופרסל דיל', amount: 214.9, kind: 'expense', card: '5512', added: t0 + 6 * H }, // other card: real
+    { id: 'h', date: '2026-11-05', merchant: 'משכורת', amount: 9000, kind: 'income', added: t0 + 6 * H },
+  ];
+  const d = findSavedDuplicates(tx);
+  assert.deepEqual(d.map(x => x.keep.id + '>' + x.drop.id).sort(), ['a>d', 'b>e', 'c>f']);
+  console.log('v3.3 saved duplicates tests passed');
+}

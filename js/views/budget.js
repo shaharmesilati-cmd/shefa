@@ -77,11 +77,18 @@ export function render(el) {
 
   <section class="card"><div class="card-h"><h2>${ic('sliders')} תקציב לקטגוריות</h2><button class="btn small primary" id="auto" type="button">${ic('sparkle')}חלוקה אוטומטית</button></div>
     <p class="hint">החלוקה האוטומטית מחלקת את הפנוי לפי יחס מקובל (סופר 30%, רכב 14%, אוכל בחוץ 10%...). אחר כך משנים כל סכום כרצונך.</p>
-    <div class="elist">${S.categories.filter(c => c.id !== 'refund').map(c => { const sp = SPENT.byCat[c.id] || 0; return `<div class="crow">${catIcon(c)}
+    ${(() => {
+      const row = c => { const sp = SPENT.byCat[c.id] || 0; return `<div class="crow">${catIcon(c)}
       <div class="crow-n"><input type="text" id="c-n-${c.id}" data-c="${c.id}" data-k="name" value="${esc(c.name)}" aria-label="שם הקטגוריה">
         <small class="${c.budget && sp > c.budget ? 't-bad' : ''}">${sp ? `יצא החודש ${money(sp)}` : 'עוד לא יצא החודש'}</small></div>
       <input type="number" inputmode="decimal" id="c-b-${c.id}" data-c="${c.id}" data-k="budget" value="${c.budget || ''}" placeholder="0" aria-label="תקציב ל${esc(c.name)}">
-      ${c.id === 'other' ? '<span></span>' : `<button class="icon-btn del" data-del-c="${c.id}" aria-label="מחיקת ${esc(c.name)}" type="button">${ic('trash')}</button>`}</div>`; }).join('')}</div>
+      ${c.id === 'other' ? '<span></span>' : `<button class="icon-btn del" data-del-c="${c.id}" aria-label="מחיקת ${esc(c.name)}" type="button">${ic('trash')}</button>`}</div>`; };
+      const all = S.categories.filter(c => c.id !== 'refund'), used = all.filter(c => c.budget > 0 || SPENT.byCat[c.id] > 0), rest = all.filter(c => !used.includes(c));
+      // a new user sees everything; after that, only categories with a budget or with spending this month
+      if (!used.length || rest.length < 3) return `<div class="elist">${all.map(row).join('')}</div>`;
+      return `<div class="elist">${used.map(row).join('')}</div>
+        <details class="morecats"><summary>${ic('caret-down')}עוד ${rest.length} קטגוריות בלי תקציב</summary><div class="elist">${rest.map(row).join('')}</div></details>`;
+    })()}
     <details class="newcat"><summary>${ic('plus')} קטגוריה חדשה</summary>
       <div class="field"><label for="nc-n">שם</label><input id="nc-n" type="text" placeholder="למשל: חיות מחמד" maxlength="40"></div>
       <div class="icon-pick" role="radiogroup" aria-label="סמל">${CAT_ICONS.map((n, i) => `<button type="button" role="radio" aria-checked="${i === CAT_ICONS.length - 1}" data-ico="${n}" class="${i === CAT_ICONS.length - 1 ? 'on' : ''}" aria-label="${ICON_NAMES[n] || 'סמל'}">${ic(n)}</button>`).join('')}</div>
@@ -89,7 +96,7 @@ export function render(el) {
 
   <details class="card explain"><summary><h2>${ic('question')} איך מחושב "אפשר להוציא היום"?</h2></summary>
     <p>הכנסה, פחות הוצאות קבועות, פחות חיסכון = <b>הפנוי להוצאות</b>. ממנו מורידים כל הוצאה משתנה שנרשמה בחודש. הוצאה שמזוהה כקבועה לא נספרת פעמיים, ותשלום חשבון האשראי מהבנק לא נספר בכלל (העסקאות עצמן כבר נספרו). קנייה שסיווגת ל"כסף שחזר" (החזרת מוצר, זיכוי) נשארת ברשימה אבל לא נספרת כהוצאה. אם בחרת "בחודש שבו האשראי יורד", קנייה באשראי נספרת בחודש של החיוב (בדרך כלל החודש הבא, או לפי "תאריך חיוב" מקובץ האקסל).</p>
-    <p>"אפשר להוציא היום" = מה שנשאר לחודש חלקי הימים שנותרו. אם היום הוצאת פחות, מחר הסכום יגדל.</p></details>`;
+    <p>כל יום מקבלים אותו סכום יומי, ומה שלא הוצאת עובר למחר. אם הוצאת מהר מהקצב, מה שנשאר לחודש מתחלק מחדש על הימים שנותרו. כסף שנעלת בכספת יוצא מהיומי.</p></details>`;
   wire(el);
 }
 

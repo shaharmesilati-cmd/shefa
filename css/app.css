@@ -666,3 +666,9 @@ button.ring-wrap:active { transform: scale(.98); }
 .nc-inline { display: flex; gap: 8px; align-items: center; margin-top: 8px; } .nc-inline input { flex: 1; min-width: 0; }
 @media (max-width: 370px) { .jar { width: 120px; } .jr-sum { font-size: 1.6rem; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+.morecats > summary { display: flex; align-items: center; gap: 6px; min-height: 44px; color: var(--primary); font-weight: 700; cursor: pointer; list-style: none; }
+.morecats > summary::-webkit-details-marker { display: none; } .morecats[open] > summary .ic { transform: rotate(180deg); }
+.dup-list { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; }
+.dup-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; min-height: 52px; padding: 4px 2px; border-bottom: 1px solid var(--line); }
+.dup-row input { width: 22px; height: 22px; } .dup-mid { min-width: 0; display: flex; flex-direction: column; } .dup-mid small { color: var(--muted); font-size: .8rem; }

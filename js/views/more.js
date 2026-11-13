@@ -3,9 +3,11 @@ import { state, persist, replaceAll, flushNow, changed } from '../store.js';
 import { $, esc, ic, toast, openSheet, download, armConfirm, monthName } from '../util.js';
 import { budgetKeyOf, normMerchant, txKey } from '../calc.js';
 import { catById } from '../store.js';
+import { findSavedDuplicates } from '../dedupe.js';
+import { money, shortDate } from '../util.js';
 import { install, lockNow, session, startAutoLock, stopAutoLock } from '../app.js';
 
-const VERSION = '3.2.0';
+const VERSION = '3.3.0';
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
@@ -84,6 +86,10 @@ export function render(el) {
     <p class="hint">עדכונים לא נכנסים לבד: כשיש גרסה חדשה תופיע הודעה ותבחר אם לעדכן. כך אף אחד לא יכול להחליף לך את האפליקציה בלי שתדע.</p>
     <div class="btn-row"><button class="btn" id="upd" type="button">${ic('refresh')}בדיקת עדכונים</button></div></section>
 
+  <section class="card"><div class="card-h"><h2>${ic('copy')} ניקוי כפילויות</h2></div>
+    <p class="hint">מחפש קניות שנשמרו פעמיים בהעלאות שונות. תראה את הרשימה לפני שמשהו נמחק.</p>
+    <button class="btn" id="dups" type="button">${ic('search')}חיפוש כפילויות</button></section>
+
   <section class="card"><div class="card-h"><h2>${ic('calendar')} ניקוי חודש</h2></div>
     <p class="hint">מוחק רק את התנועות של החודש שתבחר (ההגדרות והתקציב נשארים). שימושי אם העלית קובץ לא נכון.</p>
     ${monthsWithData().length ? `<div class="field"><label for="wm-k">איזה חודש</label><select id="wm-k">${monthsWithData().map(k => `<option value="${k}">${monthName(k)} (${state.tx.filter(t => budgetKeyOf(t.date, state.settings.startDay) === k).length} תנועות)</option>`).join('')}</select></div>
@@ -108,6 +114,23 @@ export function render(el) {
   $('#al', el).onchange = e => { S.autoLockMin = +e.target.value; persist(); toast('נשמר'); };
   $('#nm', el).oninput = e => { S.name = e.target.value.slice(0, 30); persist(); };
   wireRules(el);
+  $('#dups', el).onclick = () => {
+    const found = findSavedDuplicates(state.tx);
+    if (!found.length) { toast('לא נמצאו כפילויות'); return; }
+    openSheet(`נמצאו ${found.length} כפילויות`, `<p class="hint">מסומן = יימחק העותק הכפול. הקנייה המקורית נשארת.</p>
+      <div class="dup-list">${found.map((d, i) => `<label class="dup-row"><input type="checkbox" data-i="${i}" checked>
+        <span class="dup-mid"><b>${esc(d.drop.merchant)}</b><small>${shortDate(d.drop.date)}${d.drop.card ? ' · ' + esc(d.drop.card) : ''}${d.keep.merchant !== d.drop.merchant ? ` · כמו "${esc(d.keep.merchant)}"` : ''}</small></span>
+        <b class="num">${money(d.drop.amount, 'auto')}</b></label>`).join('')}</div>
+      <button class="btn danger" id="dup-go" type="button">${ic('trash')}מחיקת הכפילויות המסומנות</button>`, (sh, close) => {
+      $('#dup-go', sh).onclick = () => {
+        const ids = new Set([...sh.querySelectorAll('input[data-i]:checked')].map(c => found[+c.dataset.i].drop.id));
+        if (!ids.size) { close(); return; }
+        const removed = state.tx.filter(t => ids.has(t.id));
+        state.tx = state.tx.filter(t => !ids.has(t.id)); persist(); changed('tx'); close();
+        toast(`נמחקו ${removed.length} כפילויות`, { label: 'ביטול', fn: () => { state.tx.push(...removed); persist(); changed('tx'); } });
+      };
+    });
+  };
   $('#lock-btn', el).onclick = async () => { if (session.remembered) { await vault.setRemember(false).catch(() => { }); } lockNow(); };
   $('#upd', el).onclick = async () => { if (install.checkUpdate) { await install.checkUpdate().catch(() => { }); toast('בדקתי. אם יש גרסה חדשה תופיע הודעה למעלה.'); } else toast('בדיקת עדכונים פועלת רק כשהאתר פתוח מהאינטרנט.'); };
   $('#chg', el).onclick = changeCode;

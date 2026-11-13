@@ -66,3 +66,20 @@ export function markDuplicates(groups, saved) {
   }
   return groups.flat();
 }
+
+/**
+ * Duplicates among purchases that are already saved (from before the filters were improved).
+ * Two identical purchases saved in the same upload are treated as real (two coffees); the same purchase saved
+ * again in a later upload is a duplicate. Returns [{ keep, drop }]: `drop` is the later copy.
+ */
+export function findSavedDuplicates(tx) {
+  const rows = tx.filter(t => t.kind !== 'income' && t.date && t.amount > 0).slice().sort((a, b) => (a.added || 0) - (b.added || 0));
+  const kept = [], out = [];
+  for (const t of rows) {
+    const k = kept.find(x => !x.taken.has(batchOf(t)) && Math.abs((x.t.added || 0) - (t.added || 0)) > 60000 && samePurchase(x.t, t, true));
+    if (k) { k.taken.add(batchOf(t)); out.push({ keep: k.t, drop: t }); }
+    else kept.push({ t, taken: new Set() });
+  }
+  return out;
+}
+const batchOf = t => Math.round((t.added || 0) / 60000); // purchases saved together share a minute
